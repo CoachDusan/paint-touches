@@ -1,0 +1,44 @@
+<title>Paint Touches</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Paint Touches" />
+<meta name="description" content="Live possession and paint-touch tracker for basketball coaches." />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="css/styles.css" />
+
+<div id="app">
+  <header class="app-bar">
+    <span class="app-bar__title">Paint Touches</span>
+    <span id="app-bar-context" class="app-bar__context"></span>
+  </header>
+
+  <main id="view-root">
+    <!-- The active screen is rendered here by js/app.js -->
+  </main>
+
+  <nav class="tab-bar" id="tab-bar">
+    <button class="tab-bar__btn" data-view="roster">
+      <span class="tab-bar__icon">👥</span>
+      <span>Roster</span>
+    </button>
+    <button class="tab-bar__btn" data-view="playbook">
+      <span class="tab-bar__icon">📋</span>
+      <span>Playbook</span>
+    </button>
+    <button class="tab-bar__btn" data-view="game">
+      <span class="tab-bar__icon">🏀</span>
+      <span>Game</span>
+    </button>
+    <button class="tab-bar__btn" data-view="history">
+      <span class="tab-bar__icon">🗂️</span>
+      <span>History</span>
+    </button>
+  </nav>
+</div>
+
+<script type="module" src="js/app.js"></script>
