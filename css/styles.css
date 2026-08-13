@@ -578,7 +578,10 @@ select {
   font-family: inherit;
 }
 
-.segmented__btn.is-active {
+/* Scoped to the Playbook section switcher only. Left global, this would
+   strip the orange off the active quarter, which is the one thing on the
+   game screen you check at a glance. */
+.section-stack .segmented__btn.is-active {
   background: var(--surface-raised);
   color: var(--text);
 }
@@ -655,4 +658,35 @@ select {
   font-size: 0.85rem;
   color: var(--warn);
   padding: 4px 0 8px;
+}
+
+/* ---------- Stats: offense / defense switch ---------- */
+.stats-toggle {
+  margin-bottom: var(--gap);
+}
+
+.stats-toggle .segmented__btn.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.stats-toggle.is-defense .segmented__btn.is-active {
+  background: var(--defense);
+  color: var(--defense-text);
+}
+
+/* Caveats that belong with a table, not buried in a help screen — the
+   per-player breakdown counts are meaningless without theirs. */
+.stat-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  padding-bottom: 8px;
+}
+
+/* Defensive numbers wear the defensive colour, same as the tracking screen —
+   there should never be a moment where you're unsure which side of the ball
+   a figure describes. */
+.stats-panel--defense .stat-tile__value {
+  color: var(--defense);
 }

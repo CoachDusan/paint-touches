@@ -5,7 +5,7 @@
 import { el, formatDate, formatPPP } from "../utils.js";
 import { Games, Possessions } from "../models.js";
 import { computeStats } from "../stats.js";
-import { renderStatsPanel } from "./stats-panel.js";
+import { renderGameStats } from "./game-stats.js";
 
 export async function render(root) {
   const games = await Games.listCompleted();
@@ -84,7 +84,7 @@ export async function render(root) {
           el("h1", { class: "screen-title" }, game.opponent ? `vs ${game.opponent}` : "Game"),
           el("button", { class: "btn btn-sm", onclick: showList }, "← All games"),
         ]),
-        renderStatsPanel(possessions),
+        renderGameStats(possessions),
       ])
     );
   }

@@ -5,18 +5,18 @@
 import { el, formatPPP } from "../utils.js";
 import { computeStats } from "../stats.js";
 
-function statTile(label, value) {
+export function statTile(label, value) {
   return el("div", { class: "stat-tile" }, [
     el("div", { class: "stat-tile__value" }, value),
     el("div", { class: "stat-tile__label" }, label),
   ]);
 }
 
-function formatRatio(ratio) {
+export function formatRatio(ratio) {
   return ratio === null || ratio === undefined ? "—" : Math.round(ratio * 100) + "%";
 }
 
-function table(headers, rows) {
+export function table(headers, rows) {
   if (rows.length === 0) {
     return el("div", { class: "empty-state empty-state--tight" }, "No possessions logged yet.");
   }

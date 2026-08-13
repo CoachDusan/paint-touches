@@ -14,7 +14,7 @@ import {
   SIDES,
   NO_MISTAKE,
 } from "../possession.js";
-import { renderStatsPanel } from "./stats-panel.js";
+import { renderGameStats } from "./game-stats.js";
 
 export async function render(root, game) {
   const [players, plays, coverages, mistakeTypes, existingPossessions] = await Promise.all([
@@ -434,7 +434,7 @@ export async function render(root, game) {
             el("button", { class: "btn btn-sm", onclick: endGame }, "End Game"),
           ]),
           buildStatusRow(),
-          renderStatsPanel(state.possessions),
+          renderGameStats(state.possessions),
         ])
       );
       return;

@@ -3,7 +3,7 @@
 // frozen possession list) — same function, same math, so live and
 // historical numbers can never disagree with each other.
 
-import { QUARTERS, SIDES, sideOf } from "./possession.js";
+import { QUARTERS, SIDES, sideOf, NO_MISTAKE } from "./possession.js";
 
 function emptyBucket() {
   return { points: 0, possessions: 0, turnovers: 0 };
@@ -122,5 +122,145 @@ export function computeStats(allPossessions) {
         toRate: b.possessionsTouched ? b.turnovers / b.possessionsTouched : null,
       }))
       .sort((a, b) => b.touches - a.touches),
+  };
+}
+
+// ---------------------------------------------------------------------
+// Defence. A separate function rather than a branch inside computeStats,
+// because almost nothing carries over: there are no touches, no plays, and
+// `points` means points *allowed*. The one shared idea is PPP, which is
+// still total points over total possessions — just read from the other
+// bench, where lower is better.
+// ---------------------------------------------------------------------
+
+function isClean(possession) {
+  return !possession.mistake || possession.mistake.mistakeId === NO_MISTAKE.id;
+}
+
+export function computeDefenseStats(allPossessions) {
+  const possessions = allPossessions.filter((p) => sideOf(p) === SIDES.DEFENSE);
+
+  const overall = emptyBucket();
+  const clean = emptyBucket();
+  const broken = emptyBucket();
+  const byCoverage = new Map();
+  const byMistake = new Map();
+  const byPlayer = new Map();
+  const byQuarter = new Map();
+
+  let forcedTurnovers = 0;
+  let unassigned = 0;
+
+  for (const p of possessions) {
+    add(overall, p);
+    add(isClean(p) ? clean : broken, p);
+    if (p.outcome === "TO") forcedTurnovers += 1;
+
+    if (!byQuarter.has(p.quarter)) byQuarter.set(p.quarter, { ...emptyBucket(), mistakes: 0 });
+    const quarterBucket = byQuarter.get(p.quarter);
+    add(quarterBucket, p);
+    if (!isClean(p)) quarterBucket.mistakes += 1;
+
+    const coverageKey = p.coverage?.coverageId ?? "unknown";
+    if (!byCoverage.has(coverageKey)) {
+      byCoverage.set(coverageKey, {
+        name: p.coverage?.coverageName || "Unrecorded",
+        ...emptyBucket(),
+        cleanPossessions: 0,
+        forcedTurnovers: 0,
+      });
+    }
+    const coverageBucket = byCoverage.get(coverageKey);
+    add(coverageBucket, p);
+    if (isClean(p)) coverageBucket.cleanPossessions += 1;
+    if (p.outcome === "TO") coverageBucket.forcedTurnovers += 1;
+
+    if (isClean(p)) continue;
+
+    const mistakeKey = p.mistake.mistakeId;
+    if (!byMistake.has(mistakeKey)) {
+      byMistake.set(mistakeKey, { name: p.mistake.mistakeName, ...emptyBucket() });
+    }
+    add(byMistake.get(mistakeKey), p);
+
+    // A breakdown nobody was tagged for still counts as a breakdown — it
+    // just can't be attributed. Surfaced so a pile of them is visible
+    // rather than silently shrinking everyone's totals.
+    if (!p.mistakePlayer) {
+      unassigned += 1;
+      continue;
+    }
+
+    const playerKey = p.mistakePlayer.playerId;
+    if (!byPlayer.has(playerKey)) {
+      byPlayer.set(playerKey, {
+        name: p.mistakePlayer.playerName,
+        number: p.mistakePlayer.playerNumber,
+        ...emptyBucket(),
+      });
+    }
+    add(byPlayer.get(playerKey), p);
+  }
+
+  const quarterOrder = new Map(QUARTERS.map((q, i) => [q, i]));
+  const share = (n) => (overall.possessions ? n / overall.possessions : null);
+
+  return {
+    overall: {
+      ...overall,
+      ppp: ppp(overall),
+      forcedTurnovers,
+      forcedTurnoverRate: share(forcedTurnovers),
+      mistakes: broken.possessions,
+      mistakeRate: share(broken.possessions),
+      cleanRate: share(clean.possessions),
+      unassigned,
+    },
+    // The cost of a breakdown, in the only currency that matters. If these
+    // two numbers are the same, the mistakes being logged aren't the ones
+    // deciding possessions.
+    executionSplit: {
+      clean: { ...clean, ppp: ppp(clean) },
+      broken: { ...broken, ppp: ppp(broken) },
+    },
+    byQuarter: [...byQuarter.entries()]
+      .map(([quarter, b]) => ({
+        quarter,
+        ...b,
+        ppp: ppp(b),
+        mistakeRate: b.possessions ? b.mistakes / b.possessions : null,
+      }))
+      .sort((a, b) => (quarterOrder.get(a.quarter) ?? 99) - (quarterOrder.get(b.quarter) ?? 99)),
+    byCoverage: [...byCoverage.entries()]
+      .map(([id, b]) => ({
+        id,
+        name: b.name,
+        possessions: b.possessions,
+        points: b.points,
+        ppp: ppp(b),
+        cleanRate: b.possessions ? b.cleanPossessions / b.possessions : null,
+        forcedTurnoverRate: b.possessions ? b.forcedTurnovers / b.possessions : null,
+      }))
+      .sort((a, b) => b.possessions - a.possessions),
+    byMistake: [...byMistake.entries()]
+      .map(([id, b]) => ({
+        id,
+        name: b.name,
+        count: b.possessions,
+        share: share(b.possessions),
+        points: b.points,
+        ppp: ppp(b),
+      }))
+      .sort((a, b) => b.count - a.count),
+    byPlayer: [...byPlayer.entries()]
+      .map(([id, b]) => ({
+        id,
+        name: b.name,
+        number: b.number,
+        mistakes: b.possessions,
+        points: b.points,
+        ppp: ppp(b),
+      }))
+      .sort((a, b) => b.mistakes - a.mistakes),
   };
 }

@@ -25,8 +25,8 @@ Vanilla HTML/CSS/ES modules. **No build step, no npm, no framework, no bundler**
 - `js/db.js` — IndexedDB (`paint-touches`) via vendored `idb`; stores: players, plays, games, possessions
 - `js/models.js` — `Players`/`Plays` (soft-archive), `Games`, `Possessions`; `TRANSITION_PLAY` is a constant, not a DB row
 - `js/possession.js` — outcome vocabulary, point values, quarters, FT combos
-- `js/stats.js` — `computeStats(possessions)`, one pure function feeding both live and historical views
-- `js/views/stats-panel.js` — shared renderer, so live and History markup can't drift
+- `js/stats.js` — `computeStats()` (offense) and `computeDefenseStats()` (defense). **Both filter by `side` first.** Defensive possessions carry points *allowed* in the same `points` field, so any stat function that forgets the filter silently blends both teams' scoring
+- `js/views/stats-panel.js` / `defense-stats-panel.js` / `game-stats.js` — shared renderers behind one Offense/Defense switch, so live and History markup can't drift
 - `js/views/live-tracking.js` — the sideline screen: touches → outcome, with and-1 and FT sub-flows
 - `vendor/idb.js` — vendored via curl, not npm
 
