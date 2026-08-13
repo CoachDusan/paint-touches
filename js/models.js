@@ -278,6 +278,32 @@ export const Possessions = {
 // players on the same shot is two records, which is exactly what a "count
 // per player" stat needs and keeps logging to a single tap each.
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// Whole-database read and replace, for backup and restore. Restore wipes
+// what's there — it reproduces a backup exactly rather than merging, since
+// merging two copies of a season would silently double every stat.
+// ---------------------------------------------------------------------
+export const Backup = {
+  async readAll(stores) {
+    const db = await getDB();
+    const entries = await Promise.all(stores.map(async (name) => [name, await db.getAll(name)]));
+    return Object.fromEntries(entries);
+  },
+
+  async replaceAll(stores, data) {
+    const db = await getDB();
+    // One transaction across every store: a restore that half-applied would
+    // leave possessions pointing at games that no longer exist.
+    const tx = db.transaction(stores, "readwrite");
+    for (const name of stores) {
+      const store = tx.objectStore(name);
+      store.clear();
+      for (const record of data[name] || []) store.put(record);
+    }
+    await tx.done;
+  },
+};
+
 export const TagEvents = {
   async add(event) {
     const db = await getDB();

@@ -768,3 +768,81 @@ select {
 .is-coverage-trend .stat-tile__value {
   color: var(--defense);
 }
+
+/* ---------- Export ---------- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.export-status:empty {
+  display: none;
+}
+
+.share-fallback {
+  width: 100%;
+  margin-top: 8px;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  /* The point of this box is to be selected, so opt back out of the
+     app-wide user-select: none. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ---------- Print / PDF ---------- */
+/* What comes out should be the stats, not the app. Anything you tap is
+   meaningless on paper. */
+@media print {
+  :root {
+    --bg: #fff;
+    --surface: #fff;
+    --surface-raised: #fff;
+    --text: #000;
+    --text-muted: #444;
+    --border: #bbb;
+    --accent: #b3410a;
+    --defense: #0b6f9e;
+  }
+
+  .app-bar,
+  .tab-bar,
+  .export-actions,
+  .list-toolbar button,
+  .segmented,
+  .trend-chips,
+  .share-fallback {
+    display: none !important;
+  }
+
+  #app {
+    height: auto;
+  }
+
+  #view-root {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .screen {
+    max-width: none;
+  }
+
+  .card,
+  .stat-tile {
+    border-color: #ccc;
+    break-inside: avoid;
+  }
+
+  .stat-table-wrap {
+    overflow: visible;
+  }
+}

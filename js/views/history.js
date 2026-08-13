@@ -6,6 +6,8 @@ import { el, formatDate, formatPPP } from "../utils.js";
 import { Games, Possessions, TagEvents, VENUES, gameResult } from "../models.js";
 import { computeStats } from "../stats.js";
 import { renderGameStats } from "./game-stats.js";
+import { renderExportActions } from "./export-actions.js";
+import { buildGameSummaryText, buildCSV } from "../export.js";
 
 export async function render(root) {
   const games = await Games.listCompleted();
@@ -192,6 +194,12 @@ export async function render(root) {
         ]),
         editing ? buildDetailsForm(game, () => showDetail(game, stats)) : header,
         renderGameStats(summary.possessions, summary.tagEvents),
+        renderExportActions({
+          title: `${game.opponent ? "vs " + game.opponent : "Game"} — ${formatDate(game.date)}`,
+          buildSummary: () => buildGameSummaryText(game, summary.possessions, summary.tagEvents),
+          buildCsv: () => buildCSV([summary]),
+          filenameBase: `paint-touches-${game.date}${game.opponent ? "-" + game.opponent.replace(/[^a-z0-9]+/gi, "-").toLowerCase() : ""}`,
+        }),
       ])
     );
   }

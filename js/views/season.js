@@ -12,6 +12,9 @@ import { Games, Possessions, TagEvents, gameResult, VENUES } from "../models.js"
 import { computeStats, computeDefenseStats } from "../stats.js";
 import { statTile, table } from "./stats-panel.js";
 import { renderGameStats } from "./game-stats.js";
+import { renderExportActions } from "./export-actions.js";
+import { renderBackupCard } from "./backup-card.js";
+import { buildSeasonSummaryText, buildCSV } from "../export.js";
 
 // Games still in progress are left out: a half-tracked game would drag the
 // season numbers around and then change again when it finishes.
@@ -201,6 +204,13 @@ export async function render(root) {
             "Total points divided by total possessions, not the average of each game's PPP — otherwise a short game would count as much as a full one."),
         ]),
         renderGameStats(allPossessions, allTagEvents),
+        renderExportActions({
+          title: `Season — ${games.length} games`,
+          buildSummary: () => buildSeasonSummaryText(games, allPossessions, allTagEvents),
+          buildCsv: () => buildCSV(chronological),
+          filenameBase: "paint-touches-season",
+        }),
+        renderBackupCard(),
       ])
     );
   }

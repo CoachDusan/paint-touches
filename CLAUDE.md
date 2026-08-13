@@ -16,7 +16,8 @@ These encode decisions that are easy to break by accident and expensive to disco
 2. **Add new files to `PRECACHE_URLS`** in `service-worker.js`, or the app breaks offline — which is the one condition it exists for.
 3. **Never invent per-player scoring or blame stats.** We record *every player who touched the paint*, and never who shot, scored, or lost the ball. Per-player columns therefore mean "possessions this player touched that ended in X" — label them that way. Deliberate design decision, not a gap to fill.
 4. **Roster and Playbook entries are soft-archived, not deleted**, and possessions store name snapshots at write time. Mid-season roster changes must never alter a past game's numbers. The one exception is the explicit "delete all archived permanently" button — safe precisely because of those snapshots, and never something to do automatically.
-5. **`pointsForOutcome()` runs once**, when a possession closes, and the result is stored on the record. Nothing recomputes points later, so live and historical stats can never disagree.
+5. **Restore replaces, never merges.** Merging two copies of a season silently doubles every stat. `parseBackup()` refuses anything it can't fully vouch for rather than half-applying it.
+6. **`pointsForOutcome()` runs once**, when a possession closes, and the result is stored on the record. Nothing recomputes points later, so live and historical stats can never disagree.
 
 ## Architecture, and why
 
@@ -29,6 +30,8 @@ Vanilla HTML/CSS/ES modules. **No build step, no npm, no framework, no bundler**
 - `js/views/stats-panel.js` / `defense-stats-panel.js` / `game-stats.js` — shared renderers behind one Offense/Defense switch, so live and History markup can't drift
 - `js/views/live-tracking.js` — the sideline screen: touches → outcome, with and-1 and FT sub-flows
 - **Possessions vs. tag events.** A possession is a trip down the floor that ends in an outcome. A *quick tag* (e.g. "Lazy box-out") is an observation with no outcome and no PPP — its own `tagEvents` store, one record per player per occurrence. Don't force observations into the possession shape; anything deleting a game must delete both
+- `js/export.js` — pure string builders (summary / CSV / backup JSON) with no delivery logic, so they can be read and tested directly
+- `js/share.js` — the delivery side. Standalone mode has no Safari toolbar, so share and print must be triggered from in-app buttons; each route steps down share sheet → clipboard → on-screen text
 - `vendor/idb.js` — vendored via curl, not npm
 
 **Data model.** The unit is a *possession*: tap every player who touches the ball in the paint (repeat taps allowed, zero touches is valid and must count), then one outcome to close it — 2PM, 2PA, 3PM, 3PA, FT, TO. Made shots can attach an and-1 free throw to the same possession. PPP is the headline stat.
