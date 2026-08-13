@@ -148,13 +148,35 @@ export const TRANSITION_PLAY = { id: null, name: "Transition / No Play" };
 // ---------------------------------------------------------------------
 // Games
 // ---------------------------------------------------------------------
+export const VENUES = [
+  { key: "home", label: "Home" },
+  { key: "away", label: "Away" },
+  { key: "neutral", label: "Neutral" },
+];
+
+// Win/loss is derived, never stored — asking for the score and the result
+// separately invites them to disagree. Null when either score is missing,
+// which is allowed: the score is optional.
+export function gameResult(game) {
+  if (game.ourScore == null || game.theirScore == null) return null;
+  if (game.ourScore > game.theirScore) return "W";
+  if (game.ourScore < game.theirScore) return "L";
+  return "T";
+}
+
 export const Games = {
-  async create({ date, opponent }) {
+  async create({ date, opponent, venue }) {
     const db = await getDB();
     const game = {
       id: uid(),
       date,
       opponent: opponent || null,
+      venue: venue || null,
+      // The real scoreboard, entered when the game ends. Deliberately
+      // separate from the points in `possessions`, which only counts trips
+      // that were actually logged.
+      ourScore: null,
+      theirScore: null,
       status: "in_progress",
       currentQuarter: "1", // one of QUARTERS in possession.js: "1","2","3","4","OT"
       createdAt: Date.now(),
@@ -196,8 +218,13 @@ export const Games = {
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   },
 
-  async complete(id) {
-    return this.update(id, { status: "completed", completedAt: Date.now() });
+  async complete(id, { ourScore = null, theirScore = null } = {}) {
+    return this.update(id, {
+      status: "completed",
+      completedAt: Date.now(),
+      ourScore,
+      theirScore,
+    });
   },
 
   // Wipes every finished game and all of its possessions. A game still in

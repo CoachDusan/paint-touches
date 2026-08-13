@@ -49,6 +49,7 @@ export async function render(root, game) {
     // null | { outcome: "2PM"|"3PM" } (and-1 prompt) | { outcome: "FT" } (FT combo grid)
     subFlow: null,
     showStats: false,
+    endingGame: false,
   };
 
   function setAppBarContext() {
@@ -495,11 +496,57 @@ export async function render(root, game) {
     ]);
   }
 
-  async function endGame() {
-    if (!confirm("End this game? You can still review it afterward from History.")) return;
-    await Games.complete(state.game.id);
+  async function finishGame(scores) {
+    await Games.complete(state.game.id, scores);
     const { render: renderGameTab } = await import("./game.js");
     renderGameTab(root);
+  }
+
+  function buildEndGamePanel() {
+    const read = (name) => {
+      const raw = document.querySelector(`.end-game [name="${name}"]`)?.value.trim();
+      if (!raw) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
+
+    return el("div", { class: "card end-game" }, [
+      el("div", { class: "section-label" }, "Final score (optional)"),
+      el("div", { class: "form-row" }, [
+        el("div", { class: "field" }, [
+          el("label", {}, "Us"),
+          el("input", { type: "number", name: "ourScore", inputmode: "numeric", min: "0", placeholder: "68" }),
+        ]),
+        el("div", { class: "field" }, [
+          el("label", {}, "Them"),
+          el("input", { type: "number", name: "theirScore", inputmode: "numeric", min: "0", placeholder: "61" }),
+        ]),
+      ]),
+      // The two point totals in this app measure different things, and a
+      // coach seeing them disagree deserves to know why before it looks
+      // like a bug.
+      el("div", { class: "stat-note" },
+        "This is the scoreboard. The Points in your stats counts only the possessions you logged, so the two won't always match — both are right."),
+      el("div", { class: "form-row" }, [
+        el("button", {
+          class: "btn",
+          onclick: () => {
+            state.endingGame = false;
+            paint();
+          },
+        }, "Cancel"),
+        el("button", { class: "btn", onclick: () => finishGame({}) }, "End without score"),
+        el("button", {
+          class: "btn btn-primary",
+          onclick: () => finishGame({ ourScore: read("ourScore"), theirScore: read("theirScore") }),
+        }, "Save & End"),
+      ]),
+    ]);
+  }
+
+  function endGame() {
+    state.endingGame = true;
+    paint();
   }
 
   function buildStatusRow() {
@@ -519,6 +566,16 @@ export async function render(root, game) {
 
   function paint() {
     setAppBarContext();
+
+    if (state.endingGame) {
+      root.replaceChildren(
+        el("div", { class: "screen live-tracking" }, [
+          el("h1", { class: "screen-title" }, "End game"),
+          buildEndGamePanel(),
+        ])
+      );
+      return;
+    }
 
     if (state.showStats) {
       root.replaceChildren(
