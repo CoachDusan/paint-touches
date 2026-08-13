@@ -160,6 +160,21 @@ export function renderEntityList(root, config) {
         children.push(
           el("ul", { class: "entity-list" }, state.archivedItems.map((item) => buildRow(item, { archived: true })))
         );
+        children.push(
+          el("button", {
+            class: "btn btn-sm btn-danger",
+            onclick: async () => {
+              const n = state.archivedItems.length;
+              if (!confirm(
+                `Permanently delete ${n} archived ${config.itemNoun.toLowerCase()}${n === 1 ? "" : "s"}?\n\n` +
+                `This cannot be undone. Past games are not affected — they keep their own copy of every name.`
+              )) return;
+              await config.api.deleteArchived();
+              state.showArchived = false;
+              await load();
+            },
+          }, `Delete all ${state.archivedItems.length} archived permanently`)
+        );
       }
     }
 

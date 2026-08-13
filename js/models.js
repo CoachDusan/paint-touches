@@ -66,6 +66,23 @@ function archivableList(storeName) {
       const db = await getDB();
       return db.get(storeName, id);
     },
+
+    // Permanently removes every archived record. Safe for past games:
+    // possessions store player/play *names* copied in at write time, never
+    // links back to these records, so a finished game reads the same
+    // afterwards. Archiving remains the normal path — this is the "clear
+    // out the clutter" escape hatch, and it does not come back.
+    async deleteArchived() {
+      const db = await getDB();
+      const all = await db.getAll(storeName);
+      const doomed = all.filter((item) => item.archived).map((item) => item.id);
+      if (doomed.length === 0) return 0;
+
+      const tx = db.transaction(storeName, "readwrite");
+      doomed.forEach((id) => tx.store.delete(id));
+      await tx.done;
+      return doomed.length;
+    },
   };
 }
 
@@ -175,6 +192,28 @@ export const Games = {
 
   async complete(id) {
     return this.update(id, { status: "completed", completedAt: Date.now() });
+  },
+
+  // Wipes every finished game and all of its possessions. A game still in
+  // progress is deliberately left alone — "clear history" should never
+  // delete the game you're in the middle of tracking.
+  async clearCompleted() {
+    const db = await getDB();
+    const games = await db.getAll("games");
+    const doomedGames = games.filter((g) => g.status === "completed").map((g) => g.id);
+    if (doomedGames.length === 0) return 0;
+
+    const doomed = new Set(doomedGames);
+    const possessions = await db.getAll("possessions");
+    const doomedPossessions = possessions.filter((p) => doomed.has(p.gameId)).map((p) => p.id);
+
+    // Both stores in one transaction, so it can't half-succeed and leave
+    // orphaned possessions behind.
+    const tx = db.transaction(["games", "possessions"], "readwrite");
+    doomedGames.forEach((id) => tx.objectStore("games").delete(id));
+    doomedPossessions.forEach((id) => tx.objectStore("possessions").delete(id));
+    await tx.done;
+    return doomedGames.length;
   },
 };
 

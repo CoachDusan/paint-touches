@@ -30,11 +30,24 @@ export async function render(root) {
     })
   );
 
+  async function clearHistory() {
+    const n = summaries.length;
+    if (!confirm(
+      `Permanently delete all ${n} saved game${n === 1 ? "" : "s"} and every possession in them?\n\n` +
+      `This cannot be undone. A game still in progress is not affected.`
+    )) return;
+    await Games.clearCompleted();
+    render(root);
+  }
+
   function showList() {
     document.getElementById("app-bar-context").textContent = "";
     root.replaceChildren(
       el("div", { class: "screen" }, [
-        el("h1", { class: "screen-title" }, "History"),
+        el("div", { class: "list-toolbar" }, [
+          el("h1", { class: "screen-title" }, "History"),
+          el("button", { class: "btn btn-sm btn-danger", onclick: clearHistory }, "Clear all history"),
+        ]),
         el(
           "ul",
           { class: "entity-list" },
