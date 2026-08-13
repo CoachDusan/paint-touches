@@ -12,6 +12,10 @@
   --good: #22c55e;
   --bad: #ef4444;
   --warn: #eab308;
+  /* Defensive side — deliberately not the offensive accent, so the two
+     halves of the game screen can never be confused at a glance. */
+  --defense: #38bdf8;
+  --defense-text: #082f49;
 
   --radius: 14px;
   --radius-lg: 20px;
@@ -583,4 +587,72 @@ select {
    padding — stop .screen from doubling it up. */
 .section-stack .screen {
   padding: 0;
+}
+
+/* ---------- Defensive tracking ---------- */
+
+/* Offense/Defense is the one control where picking the wrong option
+   silently files a possession under the wrong team, so it's deliberately
+   larger and colour-coded rather than a quiet segment. */
+.side-toggle .segmented__btn {
+  min-height: 52px;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
+
+.side-toggle .segmented__btn.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.side-toggle.is-defense .segmented__btn.is-active {
+  background: var(--defense);
+  color: var(--defense-text);
+}
+
+/* A whole-screen tint so a glance tells you which side you're logging. */
+.live-tracking.is-defense .section-label {
+  color: var(--defense);
+}
+
+.btn-good {
+  color: var(--good);
+}
+
+.chip--good.is-active {
+  background: var(--good);
+  border-color: var(--good);
+  color: #052e16;
+}
+
+.player-tile.is-active {
+  background: var(--defense);
+  border-color: var(--defense);
+}
+
+/* The number and name carry their own colours, which are tuned for the dark
+   tile and become unreadable once it's filled in. */
+.player-tile.is-active .player-tile__number,
+.player-tile.is-active .player-tile__name {
+  color: var(--defense-text);
+}
+
+/* On the defensive side the orange accent belongs to the offense — keep the
+   selected chips in the defensive colour so the whole screen reads as one. */
+.live-tracking.is-defense .chip.is-active {
+  background: var(--defense);
+  border-color: var(--defense);
+  color: var(--defense-text);
+}
+
+.live-tracking.is-defense .chip--good.is-active {
+  background: var(--good);
+  border-color: var(--good);
+  color: #052e16;
+}
+
+.warn-note {
+  font-size: 0.85rem;
+  color: var(--warn);
+  padding: 4px 0 8px;
 }

@@ -3,7 +3,7 @@
 // frozen possession list) — same function, same math, so live and
 // historical numbers can never disagree with each other.
 
-import { QUARTERS } from "./possession.js";
+import { QUARTERS, SIDES, sideOf } from "./possession.js";
 
 function emptyBucket() {
   return { points: 0, possessions: 0, turnovers: 0 };
@@ -25,7 +25,12 @@ function toRate(bucket) {
   return bucket.possessions ? bucket.turnovers / bucket.possessions : null;
 }
 
-export function computeStats(possessions) {
+// Offensive stats only. Defensive possessions live in the same list and
+// carry points *allowed* in the same field, so without this filter every
+// number here — PPP above all — would quietly blend both teams' scoring.
+export function computeStats(allPossessions) {
+  const possessions = allPossessions.filter((p) => sideOf(p) === SIDES.OFFENSE);
+
   const overall = emptyBucket();
   const withTouches = emptyBucket();
   const noTouches = emptyBucket();
