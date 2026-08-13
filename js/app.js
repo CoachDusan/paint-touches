@@ -13,6 +13,7 @@ function showView(name) {
   if (!view) return;
 
   viewRoot.scrollTop = 0;
+  document.getElementById("app-bar-context").textContent = "";
   view.render(viewRoot);
 
   for (const btn of tabBar.querySelectorAll(".tab-bar__btn")) {
