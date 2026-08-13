@@ -8,7 +8,10 @@
 // IndexedDB (see db.js), which the browser keeps regardless of what this
 // service worker does. Updating the app shell here can never lose a game.
 
-const CACHE_VERSION = "v1";
+// Bump this on every deploy that changes an app file. The fetch handler is
+// cache-first, so an unchanged version number means iPads keep serving the
+// old code forever, no matter what's on the server.
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `paint-touches-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

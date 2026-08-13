@@ -37,6 +37,8 @@ export function renderStatsPanel(possessions) {
       statTile("PPP", formatPPP(stats.overall.points, stats.overall.possessions)),
       statTile("Points", stats.overall.points),
       statTile("Possessions", stats.overall.possessions),
+      statTile("Turnovers", stats.overall.turnovers),
+      statTile("TO rate", formatRatio(stats.overall.toRate)),
     ]),
 
     el("div", { class: "card" }, [
@@ -49,18 +51,24 @@ export function renderStatsPanel(possessions) {
         statTile("Poss. w/ touch", stats.touchSplit.withTouches.possessions),
         statTile("Poss. no touch", stats.touchSplit.noTouches.possessions),
       ]),
+      el("div", { class: "stat-strip" }, [
+        statTile("TO rate w/ touch", formatRatio(stats.touchSplit.withTouches.toRate)),
+        statTile("TO rate no touch", formatRatio(stats.touchSplit.noTouches.toRate)),
+      ]),
     ]),
 
     el("div", { class: "card" }, [
       el("div", { class: "section-label" }, "By quarter"),
       table(
-        ["Qtr", "Poss", "Pts", "PPP"],
+        ["Qtr", "Poss", "Pts", "PPP", "TO", "TO rate"],
         stats.byQuarter.map((q) =>
           el("tr", {}, [
             el("td", {}, quarterLabel(q.quarter)),
             el("td", {}, String(q.possessions)),
             el("td", {}, String(q.points)),
             el("td", {}, formatPPP(q.points, q.possessions)),
+            el("td", {}, String(q.turnovers)),
+            el("td", {}, formatRatio(q.toRate)),
           ])
         )
       ),
@@ -69,12 +77,14 @@ export function renderStatsPanel(possessions) {
     el("div", { class: "card" }, [
       el("div", { class: "section-label" }, "By play"),
       table(
-        ["Play", "Poss", "PPP", "Touch rate"],
+        ["Play", "Poss", "PPP", "TO", "TO rate", "Touch rate"],
         stats.byPlay.map((p) =>
           el("tr", {}, [
             el("td", {}, p.name),
             el("td", {}, String(p.possessions)),
             el("td", {}, formatPPP(p.points, p.possessions)),
+            el("td", {}, String(p.turnovers)),
+            el("td", {}, formatRatio(p.toRate)),
             el("td", {}, formatRatio(p.touchRate)),
           ])
         )
@@ -84,13 +94,14 @@ export function renderStatsPanel(possessions) {
     el("div", { class: "card" }, [
       el("div", { class: "section-label" }, "By player (paint touches)"),
       table(
-        ["Player", "Touches", "Poss. touched", "PPP of those poss."],
+        ["Player", "Touches", "Poss. touched", "PPP of those poss.", "TOs in those poss."],
         stats.byPlayer.map((pl) =>
           el("tr", {}, [
             el("td", {}, `#${pl.number || "--"} ${pl.name}`),
             el("td", {}, String(pl.touches)),
             el("td", {}, String(pl.possessionsTouched)),
             el("td", {}, pl.ppp === null ? "—" : pl.ppp.toFixed(2)),
+            el("td", {}, String(pl.turnovers)),
           ])
         )
       ),

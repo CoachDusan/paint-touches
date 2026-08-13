@@ -6,16 +6,23 @@
 import { QUARTERS } from "./possession.js";
 
 function emptyBucket() {
-  return { points: 0, possessions: 0 };
+  return { points: 0, possessions: 0, turnovers: 0 };
 }
 
 function add(bucket, possession) {
   bucket.points += possession.points;
   bucket.possessions += 1;
+  if (possession.outcome === "TO") bucket.turnovers += 1;
 }
 
 function ppp(bucket) {
   return bucket.possessions ? bucket.points / bucket.possessions : null;
+}
+
+// Turnovers as a share of possessions — the standard way to read TOs, since
+// a raw count means nothing without knowing how many possessions it took.
+function toRate(bucket) {
+  return bucket.possessions ? bucket.turnovers / bucket.possessions : null;
 }
 
 export function computeStats(possessions) {
@@ -58,6 +65,7 @@ export function computeStats(possessions) {
           touches: 0,
           possessionsTouched: 0,
           points: 0,
+          turnovers: 0,
         });
       }
       const playerBucket = byPlayer.get(t.playerId);
@@ -66,6 +74,10 @@ export function computeStats(possessions) {
         seen.add(t.playerId);
         playerBucket.possessionsTouched += 1;
         playerBucket.points += p.points;
+        // Same honesty rule as points: this is "a possession he touched ended
+        // in a turnover," NOT "he committed the turnover." We never record who
+        // lost the ball, so we must never imply that we do.
+        if (p.outcome === "TO") playerBucket.turnovers += 1;
       }
     }
   }
@@ -73,13 +85,13 @@ export function computeStats(possessions) {
   const quarterOrder = new Map(QUARTERS.map((q, i) => [q, i]));
 
   return {
-    overall: { ...overall, ppp: ppp(overall) },
+    overall: { ...overall, ppp: ppp(overall), toRate: toRate(overall) },
     touchSplit: {
-      withTouches: { ...withTouches, ppp: ppp(withTouches) },
-      noTouches: { ...noTouches, ppp: ppp(noTouches) },
+      withTouches: { ...withTouches, ppp: ppp(withTouches), toRate: toRate(withTouches) },
+      noTouches: { ...noTouches, ppp: ppp(noTouches), toRate: toRate(noTouches) },
     },
     byQuarter: [...byQuarter.entries()]
-      .map(([quarter, b]) => ({ quarter, ...b, ppp: ppp(b) }))
+      .map(([quarter, b]) => ({ quarter, ...b, ppp: ppp(b), toRate: toRate(b) }))
       .sort((a, b) => (quarterOrder.get(a.quarter) ?? 99) - (quarterOrder.get(b.quarter) ?? 99)),
     byPlay: [...byPlay.entries()]
       .map(([id, b]) => ({
@@ -88,6 +100,8 @@ export function computeStats(possessions) {
         points: b.points,
         possessions: b.possessions,
         ppp: ppp(b),
+        turnovers: b.turnovers,
+        toRate: toRate(b),
         touchRate: b.possessions ? b.touchPossessions / b.possessions : null,
       }))
       .sort((a, b) => b.possessions - a.possessions),
@@ -99,6 +113,8 @@ export function computeStats(possessions) {
         touches: b.touches,
         possessionsTouched: b.possessionsTouched,
         ppp: b.possessionsTouched ? b.points / b.possessionsTouched : null,
+        turnovers: b.turnovers,
+        toRate: b.possessionsTouched ? b.turnovers / b.possessionsTouched : null,
       }))
       .sort((a, b) => b.touches - a.touches),
   };
