@@ -1,11 +1,12 @@
 // The screen you'll actually use during a game: pick the play, tap every
-// player who touches the paint, then tap the outcome. Stats aren't shown
-// here yet (Stage 4) — this stage is purely about capturing every
-// possession correctly and fast.
+// player who touches the paint, then tap the outcome. A live stats panel
+// (Stage 4) can be toggled on any time to see PPP and every breakdown
+// computed from this game's possessions so far.
 
 import { el, formatDate } from "../utils.js";
 import { Games, Players, Plays, Possessions, TRANSITION_PLAY } from "../models.js";
 import { pointsForOutcome, OUTCOME_LABELS, FT_COMBOS, QUARTERS } from "../possession.js";
+import { renderStatsPanel } from "./stats-panel.js";
 
 export async function render(root, game) {
   const [players, plays, existingPossessions] = await Promise.all([
@@ -18,10 +19,11 @@ export async function render(root, game) {
     game,
     players,
     plays: [TRANSITION_PLAY, ...plays],
-    possessionCount: existingPossessions.length,
+    possessions: existingPossessions,
     current: { playId: undefined, playName: undefined, touches: [] },
     // null | { outcome: "2PM"|"3PM" } (and-1 prompt) | { outcome: "FT" } (FT combo grid)
     subFlow: null,
+    showStats: false,
   };
 
   function setAppBarContext() {
@@ -45,10 +47,10 @@ export async function render(root, game) {
     const points = pointsForOutcome(outcome, extra);
     const now = Date.now();
 
-    await Possessions.add({
+    const record = await Possessions.add({
       gameId: state.game.id,
       quarter: state.game.currentQuarter,
-      sequenceNumber: state.possessionCount + 1,
+      sequenceNumber: state.possessions.length + 1,
       play,
       touches: state.current.touches,
       outcome,
@@ -59,7 +61,7 @@ export async function render(root, game) {
       closedAt: now,
     });
 
-    state.possessionCount += 1;
+    state.possessions.push(record);
     resetPossession();
     paint();
   }
@@ -234,15 +236,44 @@ export async function render(root, game) {
     renderGameTab(root);
   }
 
+  function buildStatusRow() {
+    const count = state.possessions.length;
+    return el("div", { class: "list-toolbar" }, [
+      el("div", { class: "pill" }, `${count} possession${count === 1 ? "" : "s"} logged`),
+      el("button", {
+        class: "btn btn-sm" + (state.showStats ? " btn-primary" : ""),
+        onclick: () => {
+          state.showStats = !state.showStats;
+          paint();
+        },
+      }, state.showStats ? "Hide Stats" : "📊 Stats"),
+    ]);
+  }
+
   function paint() {
     setAppBarContext();
+
+    if (state.showStats) {
+      root.replaceChildren(
+        el("div", { class: "screen live-tracking" }, [
+          el("div", { class: "list-toolbar" }, [
+            buildQuarterSelector(),
+            el("button", { class: "btn btn-sm", onclick: endGame }, "End Game"),
+          ]),
+          buildStatusRow(),
+          renderStatsPanel(state.possessions),
+        ])
+      );
+      return;
+    }
+
     root.replaceChildren(
       el("div", { class: "screen live-tracking" }, [
         el("div", { class: "list-toolbar" }, [
           buildQuarterSelector(),
           el("button", { class: "btn btn-sm", onclick: endGame }, "End Game"),
         ]),
-        el("div", { class: "pill" }, `${state.possessionCount} possession${state.possessionCount === 1 ? "" : "s"} logged`),
+        buildStatusRow(),
         buildPlayPicker(),
         buildTouchStrip(),
         buildPlayerGrid(),
