@@ -190,6 +190,15 @@ select {
   min-width: 2ch;
 }
 
+.list-row--tappable {
+  cursor: pointer;
+}
+
+.list-row--tappable:active {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+}
+
 .list-row__actions {
   display: flex;
   gap: 8px;
