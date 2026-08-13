@@ -732,3 +732,39 @@ select {
   font-weight: 600;
   color: var(--text-muted);
 }
+
+/* ---------- Season trend ---------- */
+.trend-chips {
+  margin: 10px 0;
+}
+
+.trend-cell {
+  width: 40%;
+  min-width: 80px;
+}
+
+.trend-bar {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+/* Defensive trends are points allowed — same bar, opposite meaning, so it
+   wears the defensive colour to avoid reading as a good result. */
+.is-coverage-trend .trend-bar {
+  background: var(--defense);
+}
+
+/* Everything inside a coverage trend describes the defensive side, so the
+   controls follow the bar rather than staying on the offensive orange. */
+.is-coverage-trend .segmented__btn.is-active,
+.is-coverage-trend .chip.is-active {
+  background: var(--defense);
+  border-color: var(--defense);
+  color: var(--defense-text);
+}
+
+.is-coverage-trend .stat-tile__value {
+  color: var(--defense);
+}

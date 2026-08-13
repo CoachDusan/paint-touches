@@ -2,9 +2,10 @@ import * as roster from "./views/roster.js";
 import * as playbook from "./views/playbook.js";
 import * as game from "./views/game.js";
 import * as history from "./views/history.js";
+import * as season from "./views/season.js";
 import { seedDefensiveDefaults } from "./models.js";
 
-const views = { roster, playbook, game, history };
+const views = { roster, playbook, game, history, season };
 
 const viewRoot = document.getElementById("view-root");
 const tabBar = document.getElementById("tab-bar");
