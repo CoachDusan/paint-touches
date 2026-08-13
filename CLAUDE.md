@@ -15,7 +15,7 @@ These encode decisions that are easy to break by accident and expensive to disco
 1. **Bump `CACHE_VERSION` in `service-worker.js` on every deploy that changes an app file.** The fetch handler is cache-first, so installed iPads serve the old code forever otherwise. This is the single most common way a shipped change fails to reach the user.
 2. **Add new files to `PRECACHE_URLS`** in `service-worker.js`, or the app breaks offline — which is the one condition it exists for.
 3. **Never invent per-player scoring or blame stats.** We record *every player who touched the paint*, and never who shot, scored, or lost the ball. Per-player columns therefore mean "possessions this player touched that ended in X" — label them that way. Deliberate design decision, not a gap to fill.
-4. **Roster and Playbook entries are soft-archived, never deleted**, and possessions store name snapshots at write time. Mid-season roster changes must never alter a past game's numbers.
+4. **Roster and Playbook entries are soft-archived, not deleted**, and possessions store name snapshots at write time. Mid-season roster changes must never alter a past game's numbers. The one exception is the explicit "delete all archived permanently" button — safe precisely because of those snapshots, and never something to do automatically.
 5. **`pointsForOutcome()` runs once**, when a possession closes, and the result is stored on the record. Nothing recomputes points later, so live and historical stats can never disagree.
 
 ## Architecture, and why
