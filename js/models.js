@@ -11,18 +11,25 @@ import { uid } from "./utils.js";
 // once and both `Players` and `Plays` below just point it at their own
 // IndexedDB store.
 // ---------------------------------------------------------------------
+function byCreatedAt(a, b) {
+  return (a.createdAt || 0) - (b.createdAt || 0);
+}
+
 function archivableList(storeName) {
   return {
+    // Sorted oldest-first. IDs are random UUIDs and IndexedDB hands records
+    // back in key order, so without this every list would appear in a
+    // meaningless, shuffled order.
     async list() {
       const db = await getDB();
       const all = await db.getAll(storeName);
-      return all.filter((item) => !item.archived);
+      return all.filter((item) => !item.archived).sort(byCreatedAt);
     },
 
     async listArchived() {
       const db = await getDB();
       const all = await db.getAll(storeName);
-      return all.filter((item) => item.archived);
+      return all.filter((item) => item.archived).sort(byCreatedAt);
     },
 
     async add(fields) {
@@ -64,6 +71,51 @@ function archivableList(storeName) {
 
 export const Players = archivableList("players");
 export const Plays = archivableList("plays");
+
+// The defensive side of the system: which pick-and-roll coverage we called,
+// and the breakdowns we log against it. Same archivable shape as plays, so
+// renaming or retiring a coverage mid-season never rewrites a past game.
+export const Coverages = archivableList("coverages");
+export const Mistakes = archivableList("mistakes");
+
+// Starting points only — every one of these can be renamed or archived on
+// the Playbook screen. An empty screen is a worse first experience than a
+// list you have to prune.
+const DEFAULT_COVERAGES = ["Drop", "Hedge (Show)", "Switch", "Blitz (Trap)", "Ice (Down)", "Flat"];
+
+const DEFAULT_MISTAKES = [
+  "Guard went under the screen",
+  "Guard caught on the screen",
+  "Big not at level of screen",
+  "Big recovered late to the roller",
+  "Blown switch / miscommunication",
+  "No tag on the roller",
+  "Let ball handler go middle",
+  "Late closeout on the pop",
+  "Foul",
+];
+
+// Seeds a list only if it has never held anything — archived records count,
+// so a coach who deliberately archives every default never gets them back
+// on the next app open.
+async function seedList(storeName, names) {
+  const db = await getDB();
+  if ((await db.count(storeName)) > 0) return false;
+
+  const base = Date.now();
+  const tx = db.transaction(storeName, "readwrite");
+  names.forEach((name, i) => {
+    // Staggered createdAt so the seeded order is the order shown.
+    tx.store.put({ id: uid(), name, archived: false, createdAt: base + i, archivedAt: null });
+  });
+  await tx.done;
+  return true;
+}
+
+export async function seedDefensiveDefaults() {
+  await seedList("coverages", DEFAULT_COVERAGES);
+  await seedList("mistakes", DEFAULT_MISTAKES);
+}
 
 // Always-available option in the live tracking play picker. Deliberately
 // NOT a stored record — it can never be edited or archived away by

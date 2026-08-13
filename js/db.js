@@ -5,7 +5,11 @@
 import { openDB } from "../vendor/idb.js";
 
 const DB_NAME = "paint-touches";
-const DB_VERSION = 1;
+// v2 added the two defensive lists (coverages, mistakes). Bumping this is
+// what triggers upgrade() on a device that already has the old database —
+// existing games and roster are untouched, the new stores are just added
+// alongside them.
+const DB_VERSION = 2;
 
 let dbPromise;
 
@@ -25,6 +29,14 @@ export function getDB() {
         if (!db.objectStoreNames.contains("possessions")) {
           const store = db.createObjectStore("possessions", { keyPath: "id" });
           store.createIndex("by-game", "gameId");
+        }
+        // Defensive side: the pick-and-roll coverages we call, and the
+        // breakdowns we log against them. Same shape as plays.
+        if (!db.objectStoreNames.contains("coverages")) {
+          db.createObjectStore("coverages", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("mistakes")) {
+          db.createObjectStore("mistakes", { keyPath: "id" });
         }
       },
     });

@@ -540,3 +540,47 @@ select {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
+/* ---------- Segmented control (Playbook sections, Offense/Defense) ---------- */
+.section-stack {
+  padding: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* The section switcher sits above a screen that draws its own padding, so
+   it gets its own here rather than inheriting. */
+.segmented {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+}
+
+.segmented__btn {
+  appearance: none;
+  flex: 1 1 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: calc(var(--radius) - 5px);
+  padding: 10px 12px;
+  min-height: var(--tap-min);
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.segmented__btn.is-active {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+/* The section below the switcher already lives inside .section-stack's
+   padding — stop .screen from doubling it up. */
+.section-stack .screen {
+  padding: 0;
+}
