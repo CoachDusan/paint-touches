@@ -95,6 +95,9 @@ export const Plays = archivableList("plays");
 export const Coverages = archivableList("coverages");
 export const Mistakes = archivableList("mistakes");
 
+// Quick tags: things you spot and want counted, with no possession attached.
+export const QuickTags = archivableList("quickTags");
+
 // Starting points only — every one of these can be renamed or archived on
 // the Playbook screen. An empty screen is a worse first experience than a
 // list you have to prune.
@@ -129,9 +132,12 @@ async function seedList(storeName, names) {
   return true;
 }
 
+const DEFAULT_QUICK_TAGS = ["Lazy box-out"];
+
 export async function seedDefensiveDefaults() {
   await seedList("coverages", DEFAULT_COVERAGES);
   await seedList("mistakes", DEFAULT_MISTAKES);
+  await seedList("quickTags", DEFAULT_QUICK_TAGS);
 }
 
 // Always-available option in the live tracking play picker. Deliberately
@@ -206,12 +212,15 @@ export const Games = {
     const doomed = new Set(doomedGames);
     const possessions = await db.getAll("possessions");
     const doomedPossessions = possessions.filter((p) => doomed.has(p.gameId)).map((p) => p.id);
+    const events = await db.getAll("tagEvents");
+    const doomedEvents = events.filter((e) => doomed.has(e.gameId)).map((e) => e.id);
 
-    // Both stores in one transaction, so it can't half-succeed and leave
-    // orphaned possessions behind.
-    const tx = db.transaction(["games", "possessions"], "readwrite");
+    // All three stores in one transaction, so it can't half-succeed and
+    // leave possessions or tag events pointing at a game that's gone.
+    const tx = db.transaction(["games", "possessions", "tagEvents"], "readwrite");
     doomedGames.forEach((id) => tx.objectStore("games").delete(id));
     doomedPossessions.forEach((id) => tx.objectStore("possessions").delete(id));
+    doomedEvents.forEach((id) => tx.objectStore("tagEvents").delete(id));
     await tx.done;
     return doomedGames.length;
   },
@@ -234,5 +243,30 @@ export const Possessions = {
     const db = await getDB();
     const all = await db.getAllFromIndex("possessions", "by-game", gameId);
     return all.sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+  },
+};
+
+// ---------------------------------------------------------------------
+// Tag events — one record per player per occurrence. A lazy box-out by two
+// players on the same shot is two records, which is exactly what a "count
+// per player" stat needs and keeps logging to a single tap each.
+// ---------------------------------------------------------------------
+export const TagEvents = {
+  async add(event) {
+    const db = await getDB();
+    const record = { id: uid(), loggedAt: Date.now(), ...event };
+    await db.put("tagEvents", record);
+    return record;
+  },
+
+  async listByGame(gameId) {
+    const db = await getDB();
+    const all = await db.getAllFromIndex("tagEvents", "by-game", gameId);
+    return all.sort((a, b) => a.loggedAt - b.loggedAt);
+  },
+
+  async remove(id) {
+    const db = await getDB();
+    await db.delete("tagEvents", id);
   },
 };

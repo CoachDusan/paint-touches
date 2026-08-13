@@ -28,6 +28,7 @@ Vanilla HTML/CSS/ES modules. **No build step, no npm, no framework, no bundler**
 - `js/stats.js` — `computeStats()` (offense) and `computeDefenseStats()` (defense). **Both filter by `side` first.** Defensive possessions carry points *allowed* in the same `points` field, so any stat function that forgets the filter silently blends both teams' scoring
 - `js/views/stats-panel.js` / `defense-stats-panel.js` / `game-stats.js` — shared renderers behind one Offense/Defense switch, so live and History markup can't drift
 - `js/views/live-tracking.js` — the sideline screen: touches → outcome, with and-1 and FT sub-flows
+- **Possessions vs. tag events.** A possession is a trip down the floor that ends in an outcome. A *quick tag* (e.g. "Lazy box-out") is an observation with no outcome and no PPP — its own `tagEvents` store, one record per player per occurrence. Don't force observations into the possession shape; anything deleting a game must delete both
 - `vendor/idb.js` — vendored via curl, not npm
 
 **Data model.** The unit is a *possession*: tap every player who touches the ball in the paint (repeat taps allowed, zero touches is valid and must count), then one outcome to close it — 2PM, 2PA, 3PM, 3PA, FT, TO. Made shots can attach an and-1 free throw to the same possession. PPP is the headline stat.

@@ -264,3 +264,32 @@ export function computeDefenseStats(allPossessions) {
       .sort((a, b) => b.mistakes - a.mistakes),
   };
 }
+
+// ---------------------------------------------------------------------
+// Quick tags. Not possessions, so not PPP — just how many times each player
+// was tagged with each thing. One record per player per occurrence, so this
+// is a straight count.
+// ---------------------------------------------------------------------
+export function computeTagStats(events) {
+  const byTag = new Map();
+
+  for (const e of events) {
+    if (!byTag.has(e.tagId)) byTag.set(e.tagId, { name: e.tagName, total: 0, players: new Map() });
+    const tag = byTag.get(e.tagId);
+    tag.total += 1;
+
+    if (!tag.players.has(e.playerId)) {
+      tag.players.set(e.playerId, { name: e.playerName, number: e.playerNumber, count: 0 });
+    }
+    tag.players.get(e.playerId).count += 1;
+  }
+
+  return [...byTag.entries()]
+    .map(([id, t]) => ({
+      id,
+      name: t.name,
+      total: t.total,
+      players: [...t.players.values()].sort((a, b) => b.count - a.count),
+    }))
+    .sort((a, b) => b.total - a.total);
+}

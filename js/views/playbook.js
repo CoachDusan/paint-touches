@@ -1,12 +1,12 @@
-// Three editable lists that together describe "our system": the sets we run
-// on offense, the pick-and-roll coverages we call on defense, and the
-// breakdowns we log against those coverages. They share one tab rather than
-// three, because they're the same kind of thing and the bottom bar has no
-// room to spare.
+// Four editable lists that together describe "our system": the sets we run
+// on offense, the pick-and-roll coverages we call on defense, the breakdowns
+// we log against those coverages, and the quick tags we count on their own.
+// They share one tab rather than four, because they're the same kind of
+// thing and the bottom bar has no room to spare.
 
 import { el } from "../utils.js";
 import { renderEntityList } from "./entity-list.js";
-import { Plays, Coverages, Mistakes } from "../models.js";
+import { Plays, Coverages, Mistakes, QuickTags } from "../models.js";
 
 const SECTIONS = [
   {
@@ -43,6 +43,18 @@ const SECTIONS = [
         "No mistake types yet. Add the breakdowns you want to track — during a game you'll tap one of these, or 'No mistake' when the coverage was executed well.",
       fields: [{ key: "name", label: "Mistake", placeholder: "Guard went under the screen" }],
       api: Mistakes,
+    },
+  },
+  {
+    key: "tags",
+    tab: "Tags",
+    config: {
+      title: "Quick Tags",
+      itemNoun: "Tag",
+      emptyText:
+        "No quick tags yet. These are things you spot and want counted — tap one during a game, then tap the players. They aren't tied to a possession.",
+      fields: [{ key: "name", label: "Tag", placeholder: "Lazy box-out" }],
+      api: QuickTags,
     },
   },
 ];

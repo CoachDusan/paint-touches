@@ -7,7 +7,7 @@ import { SIDES, sideOf } from "../possession.js";
 import { renderStatsPanel } from "./stats-panel.js";
 import { renderDefenseStatsPanel } from "./defense-stats-panel.js";
 
-export function renderGameStats(possessions) {
+export function renderGameStats(possessions, tagEvents = []) {
   const container = el("div", { class: "game-stats" });
   const defenseCount = possessions.filter((p) => sideOf(p) === SIDES.DEFENSE).length;
   let side = SIDES.OFFENSE;
@@ -41,7 +41,7 @@ export function renderGameStats(possessions) {
   function paint() {
     container.replaceChildren(
       toggle(),
-      side === SIDES.OFFENSE ? renderStatsPanel(possessions) : renderDefenseStatsPanel(possessions)
+      side === SIDES.OFFENSE ? renderStatsPanel(possessions) : renderDefenseStatsPanel(possessions, tagEvents)
     );
   }
 

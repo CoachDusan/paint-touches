@@ -5,11 +5,11 @@
 import { openDB } from "../vendor/idb.js";
 
 const DB_NAME = "paint-touches";
-// v2 added the two defensive lists (coverages, mistakes). Bumping this is
-// what triggers upgrade() on a device that already has the old database —
-// existing games and roster are untouched, the new stores are just added
-// alongside them.
-const DB_VERSION = 2;
+// v2 added the two defensive lists (coverages, mistakes); v3 added quick
+// tags and the events logged against them. Bumping this is what triggers
+// upgrade() on a device that already has the old database — existing games
+// and roster are untouched, the new stores are just added alongside them.
+const DB_VERSION = 3;
 
 let dbPromise;
 
@@ -37,6 +37,17 @@ export function getDB() {
         }
         if (!db.objectStoreNames.contains("mistakes")) {
           db.createObjectStore("mistakes", { keyPath: "id" });
+        }
+        // Quick tags are things you *observe*, not possessions you close —
+        // a lazy box-out doesn't end a trip down the floor or have a PPP.
+        // They get their own store rather than being forced into the
+        // possession shape.
+        if (!db.objectStoreNames.contains("quickTags")) {
+          db.createObjectStore("quickTags", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("tagEvents")) {
+          const store = db.createObjectStore("tagEvents", { keyPath: "id" });
+          store.createIndex("by-game", "gameId");
         }
       },
     });

@@ -4,7 +4,7 @@
 // computed from this game's possessions so far.
 
 import { el, formatDate } from "../utils.js";
-import { Games, Players, Plays, Coverages, Mistakes, Possessions, TRANSITION_PLAY } from "../models.js";
+import { Games, Players, Plays, Coverages, Mistakes, QuickTags, Possessions, TagEvents, TRANSITION_PLAY } from "../models.js";
 import {
   pointsForOutcome,
   OUTCOME_LABELS,
@@ -17,13 +17,16 @@ import {
 import { renderGameStats } from "./game-stats.js";
 
 export async function render(root, game) {
-  const [players, plays, coverages, mistakeTypes, existingPossessions] = await Promise.all([
-    Players.list(),
-    Plays.list(),
-    Coverages.list(),
-    Mistakes.list(),
-    Possessions.listByGame(game.id),
-  ]);
+  const [players, plays, coverages, mistakeTypes, quickTags, existingPossessions, existingTagEvents] =
+    await Promise.all([
+      Players.list(),
+      Plays.list(),
+      Coverages.list(),
+      Mistakes.list(),
+      QuickTags.list(),
+      Possessions.listByGame(game.id),
+      TagEvents.listByGame(game.id),
+    ]);
 
   const state = {
     game,
@@ -31,7 +34,12 @@ export async function render(root, game) {
     plays: [TRANSITION_PLAY, ...plays],
     coverages,
     mistakeTypes,
+    quickTags,
     possessions: existingPossessions,
+    tagEvents: existingTagEvents,
+    // Which quick tag is open for tapping, if any. Independent of the
+    // possession being built — a lazy box-out isn't part of a possession.
+    activeTag: null,
     side: SIDES.OFFENSE,
     current: { playId: undefined, playName: undefined, touches: [] },
     // The defensive possession being built. Coverage deliberately survives
@@ -279,6 +287,92 @@ export async function render(root, game) {
     ]);
   }
 
+  async function logTag(player) {
+    const record = await TagEvents.add({
+      gameId: state.game.id,
+      quarter: state.game.currentQuarter,
+      tagId: state.activeTag.id,
+      tagName: state.activeTag.name,
+      playerId: player.id,
+      playerName: player.name,
+      playerNumber: player.number,
+    });
+    state.tagEvents.push(record);
+    paint();
+  }
+
+  async function undoLastTag() {
+    const last = [...state.tagEvents].reverse().find((e) => e.tagId === state.activeTag.id);
+    if (!last) return;
+    await TagEvents.remove(last.id);
+    state.tagEvents = state.tagEvents.filter((e) => e.id !== last.id);
+    paint();
+  }
+
+  function buildQuickTagCard() {
+    if (state.quickTags.length === 0) return null;
+
+    const active = state.activeTag;
+    const children = [
+      el("div", { class: "section-label" }, "Quick tags"),
+      el(
+        "div",
+        { class: "chip-grid" },
+        state.quickTags.map((t) =>
+          el(
+            "button",
+            {
+              class: "chip" + (active?.id === t.id ? " is-active" : ""),
+              onclick: () => {
+                state.activeTag = active?.id === t.id ? null : { id: t.id, name: t.name };
+                paint();
+              },
+            },
+            t.name
+          )
+        )
+      ),
+    ];
+
+    if (active) {
+      const tally = new Map();
+      for (const e of state.tagEvents) {
+        if (e.tagId !== active.id) continue;
+        const key = e.playerId;
+        if (!tally.has(key)) tally.set(key, { number: e.playerNumber, count: 0 });
+        tally.get(key).count += 1;
+      }
+
+      children.push(
+        el("div", { class: "stat-note" }, `Tap a player to log "${active.name}" — each tap counts once.`),
+        el(
+          "div",
+          { class: "player-grid" },
+          state.players.map((p) =>
+            el(
+              "button",
+              { class: "player-tile", onclick: () => logTag(p) },
+              [
+                el("span", { class: "player-tile__number" }, `#${p.number || "--"}`),
+                el("span", { class: "player-tile__name" }, p.name),
+              ]
+            )
+          )
+        ),
+        tally.size > 0
+          ? el("div", { class: "touch-strip" },
+              [...tally.values()].map((t) => el("span", { class: "touch-chip" }, `#${t.number || "--"} \u00d7${t.count}`)))
+          : el("div", { class: "empty-state empty-state--tight" }, "None logged yet this game."),
+        // One tap logs instantly, so a mis-tap has to be as easy to take back.
+        tally.size > 0
+          ? el("button", { class: "btn btn-sm link-btn", onclick: undoLastTag }, "Undo last")
+          : null
+      );
+    }
+
+    return el("div", { class: "card" }, children);
+  }
+
   function buildSideToggle() {
     const sides = [
       { key: SIDES.OFFENSE, label: "OFFENSE" },
@@ -434,14 +528,16 @@ export async function render(root, game) {
             el("button", { class: "btn btn-sm", onclick: endGame }, "End Game"),
           ]),
           buildStatusRow(),
-          renderGameStats(state.possessions),
+          renderGameStats(state.possessions, state.tagEvents),
         ])
       );
       return;
     }
 
     const sideContent = isDefense()
-      ? [buildCoveragePicker(), buildMistakePicker(), buildMistakePlayerPicker(), buildOutcomeRow()]
+      // Quick tags sit below the possession flow: they're a side errand, and
+      // the coverage you're logging is the main event.
+      ? [buildCoveragePicker(), buildMistakePicker(), buildMistakePlayerPicker(), buildQuickTagCard(), buildOutcomeRow()]
       : [buildPlayPicker(), buildTouchStrip(), buildPlayerGrid(), buildOutcomeRow()];
 
     root.replaceChildren(

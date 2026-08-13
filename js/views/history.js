@@ -3,7 +3,7 @@
 // list that will never change again.
 
 import { el, formatDate, formatPPP } from "../utils.js";
-import { Games, Possessions } from "../models.js";
+import { Games, Possessions, TagEvents } from "../models.js";
 import { computeStats } from "../stats.js";
 import { renderGameStats } from "./game-stats.js";
 
@@ -24,9 +24,12 @@ export async function render(root) {
   // real final PPP, not just a bare list of dates.
   const summaries = await Promise.all(
     games.map(async (game) => {
-      const possessions = await Possessions.listByGame(game.id);
+      const [possessions, tagEvents] = await Promise.all([
+        Possessions.listByGame(game.id),
+        TagEvents.listByGame(game.id),
+      ]);
       const stats = computeStats(possessions);
-      return { game, possessions, stats };
+      return { game, possessions, tagEvents, stats };
     })
   );
 
@@ -76,7 +79,7 @@ export async function render(root) {
     const bar = document.getElementById("app-bar-context");
     if (bar) bar.textContent = `${game.opponent ? "vs " + game.opponent : "Game"} — ${formatDate(game.date)}`;
 
-    const possessions = summaries.find((s) => s.game.id === game.id).possessions;
+    const summary = summaries.find((s) => s.game.id === game.id);
 
     root.replaceChildren(
       el("div", { class: "screen" }, [
@@ -84,7 +87,7 @@ export async function render(root) {
           el("h1", { class: "screen-title" }, game.opponent ? `vs ${game.opponent}` : "Game"),
           el("button", { class: "btn btn-sm", onclick: showList }, "← All games"),
         ]),
-        renderGameStats(possessions),
+        renderGameStats(summary.possessions, summary.tagEvents),
       ])
     );
   }

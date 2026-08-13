@@ -3,15 +3,34 @@
 // offensive panel: here a *low* PPP is a good night.
 
 import { el, formatPPP } from "../utils.js";
-import { computeDefenseStats } from "../stats.js";
+import { computeDefenseStats, computeTagStats } from "../stats.js";
 import { statTile, formatRatio, table } from "./stats-panel.js";
 
-export function renderDefenseStatsPanel(possessions) {
+export function renderDefenseStatsPanel(possessions, tagEvents = []) {
   const stats = computeDefenseStats(possessions);
+  const tagStats = computeTagStats(tagEvents);
   const quarterLabel = (q) => (q === "OT" ? "OT" : `Q${q}`);
 
+  // Quick tags stand on their own — they aren't possessions, so they show
+  // up even in a game where no pick-and-roll was ever logged.
+  const tagCards = tagStats.map((tag) =>
+    el("div", { class: "card" }, [
+      el("div", { class: "section-label" }, `${tag.name} — ${tag.total} total`),
+      table(
+        ["Player", "Count"],
+        tag.players.map((p) =>
+          el("tr", {}, [
+            el("td", {}, `#${p.number || "--"} ${p.name}`),
+            el("td", {}, String(p.count)),
+          ])
+        )
+      ),
+    ])
+  );
+
   if (stats.overall.possessions === 0) {
-    return el("div", { class: "stats-panel" }, [
+    return el("div", { class: "stats-panel stats-panel--defense" }, [
+      ...tagCards,
       el("div", { class: "empty-state" },
         "No defensive possessions logged yet. Switch the game screen to DEFENSE and log a pick-and-roll to see these numbers."),
     ]);
@@ -116,5 +135,7 @@ export function renderDefenseStatsPanel(possessions) {
         )
       ),
     ]),
+
+    ...tagCards,
   ]);
 }
