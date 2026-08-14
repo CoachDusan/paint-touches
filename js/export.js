@@ -3,7 +3,7 @@
 // so the awkward, browser-specific delivery lives in share.js and this can
 // be checked by reading it.
 
-import { formatDate, formatPPP } from "./utils.js";
+import { formatDate, formatPPP, formatClock, formatElapsed } from "./utils.js";
 import { computeStats, computeDefenseStats, computeTagStats } from "./stats.js";
 import { gameResult, VENUES } from "./models.js";
 
@@ -60,12 +60,27 @@ export function buildSummaryText({ title, possessions, tagEvents = [], subtitle 
       lines.push("", "By coverage:");
       for (const c of def.byCoverage) {
         lines.push(`• ${c.name} — ${c.possessions} poss, ${formatPPP(c.points, c.possessions)} allowed, ${pct(c.cleanRate)} clean`);
+        // A coverage's own breakdowns, indented under it — Weak's problems
+        // and Switch's problems are separate conversations.
+        for (const m of c.breakdowns) {
+          lines.push(`    - ${m.name} — ${m.count} (${pct(m.share)})`);
+        }
       }
     }
     if (def.byMistake.length) {
       lines.push("", "Breakdowns:");
       for (const m of def.byMistake) {
         lines.push(`• ${m.name} — ${m.count} (${pct(m.share)})`);
+      }
+    }
+
+    if (def.byPlayer.length) {
+      lines.push("", "By player:");
+      for (const p of def.byPlayer) {
+        lines.push(`• #${p.number || "--"} ${p.name} — ${p.mistakes}`);
+        for (const m of p.breakdowns) {
+          lines.push(`    - ${m.name} — ${m.count}`);
+        }
       }
     }
   }
@@ -119,6 +134,7 @@ const CSV_COLUMNS = [
   "record_type", "game_date", "opponent", "venue", "our_score", "their_score", "result",
   "quarter", "sequence", "side", "play", "coverage", "mistake", "mistake_player",
   "paint_touches", "outcome", "points", "tag", "tag_player",
+  "clock_time", "minutes_into_game",
 ];
 
 // Quotes every field rather than guessing which need it: a play called
@@ -166,6 +182,8 @@ export function buildCSV(entries) {
         paint_touches: (p.touches || []).map((t) => `#${t.playerNumber || "--"}`).join(" "),
         outcome: p.outcome,
         points: p.points,
+        clock_time: p.startedAt ? formatClock(p.startedAt) : "",
+        minutes_into_game: formatElapsed(p.startedAt, game.createdAt) || "",
       }));
     }
 
@@ -176,6 +194,8 @@ export function buildCSV(entries) {
         quarter: e.quarter,
         tag: e.tagName,
         tag_player: `#${e.playerNumber || "--"} ${e.playerName}`,
+        clock_time: e.loggedAt ? formatClock(e.loggedAt) : "",
+        minutes_into_game: formatElapsed(e.loggedAt, game.createdAt) || "",
       }));
     }
   }

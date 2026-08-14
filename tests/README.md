@@ -37,6 +37,7 @@ PATH — on this machine that's `~/Library/Python/3.9/bin`.
 | `test_stage1.py` | **v1 → v2 database upgrade** with a real game planted first; coverage/mistake seeding; stable list ordering |
 | `test_stage2.py` | Defensive tracking flow, and that defensive possessions **don't contaminate offensive PPP** |
 | `test_stage3.py` | Defensive stats maths; the clean-vs-broken split; per-player caveat |
+| `test_breakdowns.py` | Mistakes grouped under their coverage; which mistake each player made; the video clip list; **the live picker narrowing to the chosen coverage** |
 | `test_tags.py` | **v2 → v3 upgrade**; quick tags; that tagging creates no possession; undo; no orphans after clearing history |
 | `test_stage5.py` | Score, derived win/loss, venue; ending with and without a score; editing afterwards |
 | `test_cleanup.py` | Deleting archived entries; clearing history; that a game **in progress survives** both |

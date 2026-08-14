@@ -19,6 +19,7 @@ ORDER = [
     "test_stage1.py",
     "test_stage2.py",
     "test_stage3.py",
+    "test_breakdowns.py",
     "test_tags.py",
     "test_stage5.py",
     "test_cleanup.py",

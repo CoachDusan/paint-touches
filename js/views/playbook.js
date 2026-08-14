@@ -41,7 +41,17 @@ const SECTIONS = [
       itemNoun: "Mistake",
       emptyText:
         "No mistake types yet. Add the breakdowns you want to track — during a game you'll tap one of these, or 'No mistake' when the coverage was executed well.",
-      fields: [{ key: "name", label: "Mistake", placeholder: "Guard went under the screen" }],
+      fields: [
+        { key: "name", label: "Mistake", placeholder: "Guard went under the screen" },
+        {
+          key: "coverageIds",
+          label: "Only shown for these coverages",
+          type: "multiselect",
+          optionsKey: "coverages",
+          anyLabel: "Any coverage",
+        },
+      ],
+      loadOptions: async () => ({ coverages: await Coverages.list() }),
       api: Mistakes,
     },
   },
@@ -70,7 +80,23 @@ export function render(root) {
     const section = SECTIONS.find((s) => s.key === activeKey) || SECTIONS[0];
     renderEntityList(sectionRoot, {
       ...section.config,
-      renderRowLabel: (item) => item.name,
+      renderRowLabel: (item, options) => {
+        const assigned = item.coverageIds || [];
+        if (!assigned.length) {
+          // No assignment means it shows up under every coverage, which is
+          // worth saying out loud rather than leaving the row bare.
+          return section.key === "mistakes"
+            ? [el("span", {}, item.name), el("span", { class: "pill" }, "Any coverage")]
+            : item.name;
+        }
+        const names = (options.coverages || [])
+          .filter((c) => assigned.includes(c.id))
+          .map((c) => c.name);
+        return [
+          el("span", {}, item.name),
+          ...names.map((n) => el("span", { class: "pill" }, n)),
+        ];
+      },
     });
   }
 

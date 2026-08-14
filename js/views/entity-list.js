@@ -10,8 +10,12 @@ import { el } from "../utils.js";
  * @param {string} config.title
  * @param {string} config.itemNoun            e.g. "Player" / "Play"
  * @param {string} config.emptyText
- * @param {{key:string,label:string,placeholder?:string,maxlength?:number,widthClass?:string}[]} config.fields
- * @param {(item:object) => string} config.renderRowLabel
+ * @param {{key:string,label:string,placeholder?:string,maxlength?:number,widthClass?:string,
+ *          type?:"text"|"multiselect",optionsKey?:string,anyLabel?:string}[]} config.fields
+ * @param {(item:object) => (string|Node|Array)} config.renderRowLabel
+ * @param {() => Promise<Record<string,{id:string,name:string}[]>>} [config.loadOptions]
+ *        Choices for any `multiselect` field, keyed by the field's optionsKey.
+ *        Loaded alongside the list, since the form is built synchronously.
  * @param {{list,listArchived,add,update,archive,unarchive}} config.api
  */
 export function renderEntityList(root, config) {
@@ -20,25 +24,44 @@ export function renderEntityList(root, config) {
     archivedItems: [],
     showArchived: false,
     formMode: null, // null | "add" | { edit: id }
+    options: {},
   };
 
+  const textFields = () => config.fields.filter((f) => (f.type || "text") === "text");
+  const multiFields = () => config.fields.filter((f) => f.type === "multiselect");
+
   async function load() {
-    state.items = await config.api.list();
-    state.archivedItems = await config.api.listArchived();
+    const [items, archivedItems, options] = await Promise.all([
+      config.api.list(),
+      config.api.listArchived(),
+      config.loadOptions ? config.loadOptions() : Promise.resolve({}),
+    ]);
+    state.items = items;
+    state.archivedItems = archivedItems;
+    state.options = options;
     paint();
   }
 
-  function readForm(formEl) {
-    const values = {};
-    for (const field of config.fields) {
-      const input = formEl.querySelector(`[name="${field.key}"]`);
-      values[field.key] = input.value.trim();
-    }
-    return values;
-  }
-
   function buildFieldsForm(existing) {
-    const inputs = config.fields.map((field) =>
+    // Chips aren't form inputs, so a multiselect's value is held here for the
+    // lifetime of this form and read back on submit.
+    const chosen = {};
+    for (const field of multiFields()) {
+      chosen[field.key] = [...(existing?.[field.key] || [])];
+    }
+
+    function readForm(formEl) {
+      const values = {};
+      for (const field of textFields()) {
+        values[field.key] = formEl.querySelector(`[name="${field.key}"]`).value.trim();
+      }
+      for (const field of multiFields()) {
+        values[field.key] = [...chosen[field.key]];
+      }
+      return values;
+    }
+
+    const inputs = textFields().map((field) =>
       el("div", { class: "field" + (field.widthClass ? " " + field.widthClass : "") }, [
         el("label", {}, field.label),
         el("input", {
@@ -51,8 +74,45 @@ export function renderEntityList(root, config) {
       ])
     );
 
+    // An empty selection means "applies to all", which is the sane default:
+    // a mistake nobody has assigned yet should still be offered, not hidden.
+    const multiInputs = multiFields().map((field) => {
+      const options = state.options[field.optionsKey] || [];
+      const chipGrid = el("div", { class: "chip-grid" });
+
+      const repaintChips = () => {
+        chipGrid.replaceChildren(
+          el("button", {
+            type: "button",
+            class: "chip" + (chosen[field.key].length === 0 ? " is-active" : ""),
+            onclick: () => {
+              chosen[field.key] = [];
+              repaintChips();
+            },
+          }, field.anyLabel || "Any"),
+          ...options.map((option) =>
+            el("button", {
+              type: "button",
+              class: "chip" + (chosen[field.key].includes(option.id) ? " is-active" : ""),
+              onclick: () => {
+                const list = chosen[field.key];
+                const at = list.indexOf(option.id);
+                if (at === -1) list.push(option.id);
+                else list.splice(at, 1);
+                repaintChips();
+              },
+            }, option.name)
+          )
+        );
+      };
+      repaintChips();
+
+      return el("div", { class: "field" }, [el("label", {}, field.label), chipGrid]);
+    });
+
     const form = el("form", { class: "card entity-form" }, [
       el("div", { class: "form-row" }, inputs),
+      ...multiInputs,
       el("div", { class: "form-row" }, [
         el("button", { type: "submit", class: "btn btn-primary" }, existing ? "Save" : "Add"),
         el("button", {
@@ -88,7 +148,7 @@ export function renderEntityList(root, config) {
     }
 
     return el("li", { class: "list-row" }, [
-      el("span", { class: "list-row__main" }, config.renderRowLabel(item)),
+      el("span", { class: "list-row__main" }, config.renderRowLabel(item, state.options)),
       el("span", { class: "list-row__actions" }, [
         archived
           ? el("button", {

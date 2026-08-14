@@ -48,3 +48,20 @@ export function el(tag, attrs = {}, children = []) {
   }
   return node;
 }
+
+// Wall-clock time of a tap, e.g. "7:42 PM". The most reliable handle for
+// finding a moment in video, since video files carry their own timestamps.
+export function formatClock(ms) {
+  if (!ms) return "—";
+  return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+// How far into the game it happened, e.g. "14:20". Only meaningful against a
+// known start, so callers without one should leave it out rather than guess.
+export function formatElapsed(ms, startMs) {
+  if (!ms || !startMs || ms < startMs) return null;
+  const total = Math.round((ms - startMs) / 1000);
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}

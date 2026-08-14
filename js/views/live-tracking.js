@@ -429,8 +429,25 @@ export async function render(root, game) {
     ]);
   }
 
+  // A mistake with no coverages assigned applies everywhere. If a coverage
+  // has nothing assigned to it at all, fall back to the full list with a note
+  // rather than leaving you with nothing to tap mid-game.
+  function mistakesForCoverage() {
+    const coverageId = state.currentDef.coverage?.coverageId;
+    if (!coverageId) return { list: state.mistakeTypes, filtered: false };
+
+    const matching = state.mistakeTypes.filter((m) => {
+      const assigned = m.coverageIds || [];
+      return assigned.length === 0 || assigned.includes(coverageId);
+    });
+    return matching.length > 0
+      ? { list: matching, filtered: matching.length < state.mistakeTypes.length }
+      : { list: state.mistakeTypes, filtered: false, fellBack: true };
+  }
+
   function buildMistakePicker() {
     const selectedId = state.currentDef.mistake?.mistakeId;
+    const { list: offered, fellBack } = mistakesForCoverage();
     const chip = (id, name, extraClass = "") =>
       el(
         "button",
@@ -450,8 +467,12 @@ export async function render(root, game) {
       el("div", { class: "section-label" }, "What broke down?"),
       el("div", { class: "chip-grid" }, [
         chip(NO_MISTAKE.id, NO_MISTAKE.name, " chip--good"),
-        ...state.mistakeTypes.map((m) => chip(m.id, m.name)),
+        ...offered.map((m) => chip(m.id, m.name)),
       ]),
+      fellBack
+        ? el("div", { class: "stat-note" },
+            "No breakdowns are assigned to this coverage yet, so all of them are shown. Assign them under Playbook → Mistakes.")
+        : null,
     ]);
   }
 
@@ -585,7 +606,7 @@ export async function render(root, game) {
             el("button", { class: "btn btn-sm", onclick: endGame }, "End Game"),
           ]),
           buildStatusRow(),
-          renderGameStats(state.possessions, state.tagEvents),
+          renderGameStats(state.possessions, state.tagEvents, { gameStart: state.game.createdAt }),
         ])
       );
       return;

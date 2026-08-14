@@ -168,6 +168,7 @@ export function computeDefenseStats(allPossessions) {
         ...emptyBucket(),
         cleanPossessions: 0,
         forcedTurnovers: 0,
+        breakdowns: new Map(),
       });
     }
     const coverageBucket = byCoverage.get(coverageKey);
@@ -176,6 +177,14 @@ export function computeDefenseStats(allPossessions) {
     if (p.outcome === "TO") coverageBucket.forcedTurnovers += 1;
 
     if (isClean(p)) continue;
+
+    // Which breakdowns happen inside which coverage. Read from what was
+    // actually logged rather than from how mistakes are assigned, so a
+    // mistake tapped under the wrong coverage shows up where it happened.
+    if (!coverageBucket.breakdowns.has(p.mistake.mistakeId)) {
+      coverageBucket.breakdowns.set(p.mistake.mistakeId, { name: p.mistake.mistakeName, ...emptyBucket() });
+    }
+    add(coverageBucket.breakdowns.get(p.mistake.mistakeId), p);
 
     const mistakeKey = p.mistake.mistakeId;
     if (!byMistake.has(mistakeKey)) {
@@ -197,9 +206,29 @@ export function computeDefenseStats(allPossessions) {
         name: p.mistakePlayer.playerName,
         number: p.mistakePlayer.playerNumber,
         ...emptyBucket(),
+        breakdowns: new Map(),
+        clips: [],
       });
     }
-    add(byPlayer.get(playerKey), p);
+    const playerBucket = byPlayer.get(playerKey);
+    add(playerBucket, p);
+
+    if (!playerBucket.breakdowns.has(p.mistake.mistakeId)) {
+      playerBucket.breakdowns.set(p.mistake.mistakeId, { name: p.mistake.mistakeName, count: 0 });
+    }
+    playerBucket.breakdowns.get(p.mistake.mistakeId).count += 1;
+
+    // Enough to find the moment on video: which quarter, when it was tapped,
+    // and what to look for. Timestamps have been recorded since the first
+    // version, so this fills in for games already logged.
+    playerBucket.clips.push({
+      quarter: p.quarter,
+      at: p.startedAt || p.closedAt || null,
+      mistakeName: p.mistake.mistakeName,
+      coverageName: p.coverage?.coverageName || null,
+      outcome: p.outcome,
+      points: p.points,
+    });
   }
 
   const quarterOrder = new Map(QUARTERS.map((q, i) => [q, i]));
@@ -240,6 +269,16 @@ export function computeDefenseStats(allPossessions) {
         ppp: ppp(b),
         cleanRate: b.possessions ? b.cleanPossessions / b.possessions : null,
         forcedTurnoverRate: b.possessions ? b.forcedTurnovers / b.possessions : null,
+        breakdowns: [...b.breakdowns.entries()]
+          .map(([id, m]) => ({
+            id,
+            name: m.name,
+            count: m.possessions,
+            share: b.possessions ? m.possessions / b.possessions : null,
+            points: m.points,
+            ppp: ppp(m),
+          }))
+          .sort((a, b2) => b2.count - a.count),
       }))
       .sort((a, b) => b.possessions - a.possessions),
     byMistake: [...byMistake.entries()]
@@ -260,6 +299,13 @@ export function computeDefenseStats(allPossessions) {
         mistakes: b.possessions,
         points: b.points,
         ppp: ppp(b),
+        breakdowns: [...b.breakdowns.entries()]
+          .map(([id, m]) => ({ id, name: m.name, count: m.count }))
+          .sort((a, b2) => b2.count - a.count),
+        // Chronological, because that's the order you'd scrub through video.
+        clips: b.clips
+          .slice()
+          .sort((x, y) => (quarterOrder.get(x.quarter) ?? 99) - (quarterOrder.get(y.quarter) ?? 99) || (x.at || 0) - (y.at || 0)),
       }))
       .sort((a, b) => b.mistakes - a.mistakes),
   };

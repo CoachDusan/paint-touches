@@ -193,7 +193,7 @@ export async function render(root) {
           el("button", { class: "btn btn-sm", onclick: showList }, "← All games"),
         ]),
         editing ? buildDetailsForm(game, () => showDetail(game, stats)) : header,
-        renderGameStats(summary.possessions, summary.tagEvents),
+        renderGameStats(summary.possessions, summary.tagEvents, { gameStart: game.createdAt }),
         renderExportActions({
           title: `${game.opponent ? "vs " + game.opponent : "Game"} — ${formatDate(game.date)}`,
           buildSummary: () => buildGameSummaryText(game, summary.possessions, summary.tagEvents),

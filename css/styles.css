@@ -846,3 +846,61 @@ select {
     overflow: visible;
   }
 }
+
+/* ---------- Grouped breakdowns and the video clip list ---------- */
+.group-block {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.group-block:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.group-block__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.clip-list {
+  margin-top: 10px;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.clip-group__head {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--defense);
+  margin: 8px 0 4px;
+}
+
+.clip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.clip:last-child {
+  border-bottom: none;
+}
+
+/* The time is the thing you're scanning for, so it leads and it's fixed
+   width — a ragged column is slow to read down. */
+.clip__time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 8ch;
+}
+
+.clip__what {
+  color: var(--text-muted);
+}

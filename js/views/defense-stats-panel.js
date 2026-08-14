@@ -2,11 +2,65 @@
 // the live screen and History already hold. Read it the opposite way to the
 // offensive panel: here a *low* PPP is a good night.
 
-import { el, formatPPP } from "../utils.js";
+import { el, formatPPP, formatClock, formatElapsed } from "../utils.js";
 import { computeDefenseStats, computeTagStats } from "../stats.js";
 import { statTile, formatRatio, table } from "./stats-panel.js";
 
-export function renderDefenseStatsPanel(possessions, tagEvents = []) {
+// Summed by default; the clip list is what you open when it's time to cut
+// video, so it stays out of the way until asked for.
+function playerBlock(player, gameStart) {
+  const clips = el("div", { class: "clip-list", hidden: true },
+    groupClipsByQuarter(player.clips).map(([quarter, group]) =>
+      el("div", { class: "clip-group" }, [
+        el("div", { class: "clip-group__head" }, quarter === "OT" ? "OT" : `Q${quarter}`),
+        ...group.map((clip) => {
+          const elapsed = formatElapsed(clip.at, gameStart);
+          return el("div", { class: "clip" }, [
+            el("span", { class: "clip__time" }, formatClock(clip.at)),
+            elapsed ? el("span", { class: "pill" }, `${elapsed} in`) : null,
+            el("span", { class: "clip__what" }, clip.mistakeName),
+            clip.coverageName ? el("span", { class: "pill" }, clip.coverageName) : null,
+          ]);
+        }),
+      ])
+    )
+  );
+
+  const toggle = el("button", {
+    class: "btn btn-sm",
+    onclick: () => {
+      clips.hidden = !clips.hidden;
+      toggle.textContent = clips.hidden ? `Clips (${player.clips.length})` : "Hide clips";
+    },
+  }, `Clips (${player.clips.length})`);
+
+  return el("div", { class: "group-block" }, [
+    el("div", { class: "group-block__head" }, [
+      el("strong", {}, `#${player.number || "--"} ${player.name}`),
+      el("span", { class: "pill" }, `${player.mistakes} breakdown${player.mistakes === 1 ? "" : "s"}`),
+      el("span", { class: "pill" }, `${formatPPP(player.points, player.mistakes)} allowed`),
+      toggle,
+    ]),
+    table(
+      ["Breakdown", "Times"],
+      player.breakdowns.map((m) =>
+        el("tr", {}, [el("td", {}, m.name), el("td", {}, String(m.count))])
+      )
+    ),
+    clips,
+  ]);
+}
+
+function groupClipsByQuarter(clips) {
+  const groups = new Map();
+  for (const clip of clips) {
+    if (!groups.has(clip.quarter)) groups.set(clip.quarter, []);
+    groups.get(clip.quarter).push(clip);
+  }
+  return [...groups.entries()];
+}
+
+export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart = null } = {}) {
   const stats = computeDefenseStats(possessions);
   const tagStats = computeTagStats(tagEvents);
   const quarterLabel = (q) => (q === "OT" ? "OT" : `Q${q}`);
@@ -76,8 +130,38 @@ export function renderDefenseStatsPanel(possessions, tagEvents = []) {
       ),
     ]),
 
+    // Which breakdowns belong to which coverage. Weak's problems and
+    // Switch's problems are different conversations, so they don't share a
+    // list.
     el("div", { class: "card" }, [
-      el("div", { class: "section-label" }, "Most common breakdowns"),
+      el("div", { class: "section-label" }, "Breakdowns by coverage"),
+      ...stats.byCoverage.map((c) =>
+        el("div", { class: "group-block" }, [
+          el("div", { class: "group-block__head" }, [
+            el("strong", {}, c.name),
+            el("span", { class: "pill" }, `${c.possessions} poss`),
+            el("span", { class: "pill" }, `${formatPPP(c.points, c.possessions)} allowed`),
+            el("span", { class: "pill" }, `${formatRatio(c.cleanRate)} clean`),
+          ]),
+          c.breakdowns.length === 0
+            ? el("div", { class: "empty-state empty-state--tight" }, "No breakdowns — executed clean every time.")
+            : table(
+                ["Breakdown", "Times", "Share of this coverage", "PPP allowed"],
+                c.breakdowns.map((m) =>
+                  el("tr", {}, [
+                    el("td", {}, m.name),
+                    el("td", {}, String(m.count)),
+                    el("td", {}, formatRatio(m.share)),
+                    el("td", {}, formatPPP(m.points, m.count)),
+                  ])
+                )
+              ),
+        ])
+      ),
+    ]),
+
+    el("div", { class: "card" }, [
+      el("div", { class: "section-label" }, "All breakdowns"),
       stats.byMistake.length === 0
         ? el("div", { class: "empty-state empty-state--tight" }, "No breakdowns logged — every possession was executed clean.")
         : table(
@@ -101,18 +185,11 @@ export function renderDefenseStatsPanel(possessions, tagEvents = []) {
       // who defends five, and that is not the same as being worse.
       el("div", { class: "stat-note" },
         "Counts only. We don't record how many pick-and-rolls each player defended, so these can't be turned into a rate — a player who guards more of them will appear more often."),
+      el("div", { class: "stat-note" },
+        "Open Clips to cut video. Times are when you tapped it, which is a beat after the play — seek back a few seconds."),
       stats.byPlayer.length === 0
         ? el("div", { class: "empty-state empty-state--tight" }, "No breakdowns assigned to a player yet.")
-        : table(
-            ["Player", "Breakdowns", "PPP allowed on those"],
-            stats.byPlayer.map((p) =>
-              el("tr", {}, [
-                el("td", {}, `#${p.number || "--"} ${p.name}`),
-                el("td", {}, String(p.mistakes)),
-                el("td", {}, formatPPP(p.points, p.mistakes)),
-              ])
-            )
-          ),
+        : el("div", {}, stats.byPlayer.map((p) => playerBlock(p, gameStart))),
       stats.overall.unassigned > 0
         ? el("div", { class: "warn-note" },
             `${stats.overall.unassigned} breakdown${stats.overall.unassigned === 1 ? "" : "s"} logged without a player — not counted in the table above.`)
