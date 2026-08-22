@@ -64,3 +64,24 @@ Two things worth knowing, both learned the hard way here:
 - Assert on scoped selectors, not the first match on the page. A test that
   grabbed "the first two chips" broke the day a new card appeared above —
   which was useful that time, and won't be next time.
+
+## test_sorting.py
+
+Sorting, both kinds of it.
+
+**List sort** — the order of the tap buttons. Plants a roster added in an
+order that is neither jersey nor alphabetical, including `#12` (which sorts
+wrongly if anyone ever compares numbers as text) and a player with no number
+at all. Checks the Roster defaults to jersey order, that switching the sort
+re-orders it, that the choice survives a reload, and that the player buttons
+on the game screen follow it.
+
+The one that protects the sideline: **the buttons must not move on their
+own.** Tapping a player and closing a possession must leave every tile
+exactly where it was.
+
+**Table sort** — tapping a stats column header. Checks the three-tap cycle
+(sort → reverse → back to default) and, most importantly, that a sorted
+column survives a new possession: the live panel rebuilds itself every time
+one closes, and the table has to come back sorted the same way with the new
+numbers folded in.

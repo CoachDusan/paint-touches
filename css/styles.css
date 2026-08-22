@@ -322,6 +322,31 @@ select {
   gap: var(--gap);
 }
 
+/* "Sort by [ # | A–Z | Added ]" above the Roster / Playbook list. Smaller
+   than the tap targets in the game screen on purpose — it's a setting you
+   touch between games, not something to hit in a hurry. */
+.sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sort-bar__label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.segmented--inline .segmented__btn {
+  padding: 6px 14px;
+  min-height: 36px;
+  font-size: 0.85rem;
+  /* "A–Z" otherwise breaks across two lines at the dash. */
+  white-space: nowrap;
+}
+
 .entity-list {
   display: flex;
   flex-direction: column;
@@ -522,6 +547,48 @@ select {
   letter-spacing: 0.04em;
   padding: 4px 8px 8px 0;
   border-bottom: 1px solid var(--border);
+}
+
+/* Tappable column headers. The whole header cell is the target, padded to
+   stay hittable with a thumb even though the label itself is tiny. */
+.stat-table__th--sortable {
+  padding: 0 8px 0 0;
+}
+
+.sort-th {
+  appearance: none;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  padding: 8px 0 10px;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.stat-table th.is-sorted {
+  color: var(--accent);
+}
+
+.stats-panel--defense .stat-table th.is-sorted {
+  color: var(--defense);
+}
+
+.sort-arrow {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+/* Present but quiet on columns you haven't sorted by — enough to show the
+   header is tappable, not enough to compete with the numbers. */
+.sort-arrow--idle {
+  opacity: 0.35;
 }
 
 .stat-table td {

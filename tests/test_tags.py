@@ -92,7 +92,7 @@ with sync_playwright() as pw:
     # Playbook now has four sections
     page.click('.tab-bar button[data-view="playbook"]'); page.wait_for_timeout(400)
     check("four playbook sections",
-          page.evaluate("[...document.querySelectorAll('.segmented__btn')].map(b=>b.textContent)"),
+          page.evaluate("[...document.querySelectorAll('.segmented__btn[data-section]')].map(b=>b.textContent)"),
           ["Plays","Coverages","Mistakes","Tags"])
     page.click('.segmented__btn:has-text("Tags")'); page.wait_for_timeout(400)
     check("tags section lists the seed", "Lazy box-out" in page.text_content(".entity-list"), True)

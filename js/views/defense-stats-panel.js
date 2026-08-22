@@ -45,7 +45,8 @@ function playerBlock(player, gameStart) {
       ["Breakdown", "Times"],
       player.breakdowns.map((m) =>
         el("tr", {}, [el("td", {}, m.name), el("td", {}, String(m.count))])
-      )
+      ),
+      `def-player-breakdowns-${player.id}`
     ),
     clips,
   ]);
@@ -77,7 +78,8 @@ export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart
             el("td", {}, `#${p.number || "--"} ${p.name}`),
             el("td", {}, String(p.count)),
           ])
-        )
+        ),
+        `tag-${tag.name}`
       ),
     ])
   );
@@ -126,7 +128,8 @@ export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart
             el("td", {}, formatRatio(c.cleanRate)),
             el("td", {}, formatRatio(c.forcedTurnoverRate)),
           ])
-        )
+        ),
+        "def-coverage"
       ),
     ]),
 
@@ -154,7 +157,8 @@ export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart
                     el("td", {}, formatRatio(m.share)),
                     el("td", {}, formatPPP(m.points, m.count)),
                   ])
-                )
+                ),
+                `def-coverage-breakdowns-${c.name}`
               ),
         ])
       ),
@@ -173,7 +177,8 @@ export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart
                 el("td", {}, formatRatio(m.share)),
                 el("td", {}, formatPPP(m.points, m.count)),
               ])
-            )
+            ),
+            "def-mistake"
           ),
     ]),
 
@@ -209,7 +214,8 @@ export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart
             el("td", {}, String(q.mistakes)),
             el("td", {}, formatRatio(q.mistakeRate)),
           ])
-        )
+        ),
+        "def-quarter"
       ),
     ]),
 

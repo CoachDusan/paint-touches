@@ -108,7 +108,7 @@ with sync_playwright() as pw:
     # Playbook screen: three sections
     page.click('.tab-bar button[data-view="playbook"]')
     page.wait_for_timeout(400)
-    check("four section tabs", page.evaluate("[...document.querySelectorAll('.segmented__btn')].map(b=>b.textContent)"),
+    check("four section tabs", page.evaluate("[...document.querySelectorAll('.segmented__btn[data-section]')].map(b=>b.textContent)"),
           ["Plays","Coverages","Mistakes","Tags"])
     check("plays section active first", page.text_content(".screen-title"), "Playbook")
     check("existing play still listed", page.text_content(".entity-list"), "Horns" if page.text_content(".entity-list").strip()=="Horns" else page.text_content(".entity-list"))

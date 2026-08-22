@@ -3,6 +3,7 @@
 // identical, so both just configure this once instead of duplicating it.
 
 import { el } from "../utils.js";
+import { LIST_SORTS, getListSort, setListSort } from "../sort.js";
 
 /**
  * @param {HTMLElement} root
@@ -13,6 +14,8 @@ import { el } from "../utils.js";
  * @param {{key:string,label:string,placeholder?:string,maxlength?:number,widthClass?:string,
  *          type?:"text"|"multiselect",optionsKey?:string,anyLabel?:string}[]} config.fields
  * @param {(item:object) => (string|Node|Array)} config.renderRowLabel
+ * @param {string} [config.sortListKey]      Store name this list sorts under, e.g. "players"
+ * @param {string[]} [config.sortOptions]    Keys from LIST_SORTS to offer, in display order
  * @param {() => Promise<Record<string,{id:string,name:string}[]>>} [config.loadOptions]
  *        Choices for any `multiselect` field, keyed by the field's optionsKey.
  *        Loaded alongside the list, since the form is built synchronously.
@@ -179,6 +182,29 @@ export function renderEntityList(root, config) {
     ]);
   }
 
+  // The order chosen here is the order the tap buttons appear in during a
+  // game — that's the whole point of it, so it says so out loud.
+  function buildSortBar() {
+    if (!config.sortListKey || !config.sortOptions?.length) return null;
+    const active = getListSort(config.sortListKey);
+    return el("div", { class: "sort-bar" }, [
+      el("span", { class: "sort-bar__label" }, "Sort by"),
+      el("div", { class: "segmented segmented--inline" },
+        config.sortOptions.map((key) =>
+          el("button", {
+            class: "segmented__btn" + (key === active ? " is-active" : ""),
+            "data-sort": key,
+            onclick: async () => {
+              if (getListSort(config.sortListKey) === key) return;
+              setListSort(config.sortListKey, key);
+              await load();
+            },
+          }, LIST_SORTS[key].label)
+        )
+      ),
+    ]);
+  }
+
   function paint() {
     const children = [
       el("div", { class: "list-toolbar" }, [
@@ -192,6 +218,9 @@ export function renderEntityList(root, config) {
         }, `+ Add ${config.itemNoun}`),
       ]),
     ];
+
+    const sortBar = buildSortBar();
+    if (sortBar) children.push(sortBar);
 
     if (state.formMode === "add") {
       children.push(buildFieldsForm(null));

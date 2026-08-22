@@ -182,7 +182,8 @@ export async function render(root) {
                   })
                 : null),
           ])
-        )
+        ),
+        `season-trend-${state.kind}`
       ),
       el("div", { class: "stat-note" },
         "Bars are scaled against this selection's best game. On the Coverages side a shorter bar is the good one — that's points you allowed."),

@@ -11,6 +11,9 @@ export function render(root) {
       { key: "name", label: "Name", placeholder: "Jordan Smith" },
     ],
     renderRowLabel: (player) => `#${player.number || "--"}  ${player.name}`,
+    // This order is also the order of the player buttons during a game.
+    sortListKey: "players",
+    sortOptions: ["number", "name", "added"],
     api: Players,
   });
 }

@@ -3,6 +3,7 @@
 
 import { getDB } from "./db.js";
 import { uid } from "./utils.js";
+import { sortEntities } from "./sort.js";
 
 // ---------------------------------------------------------------------
 // Players and Plays are the same *shape*: a simple named record you can
@@ -11,25 +12,22 @@ import { uid } from "./utils.js";
 // once and both `Players` and `Plays` below just point it at their own
 // IndexedDB store.
 // ---------------------------------------------------------------------
-function byCreatedAt(a, b) {
-  return (a.createdAt || 0) - (b.createdAt || 0);
-}
-
 function archivableList(storeName) {
   return {
-    // Sorted oldest-first. IDs are random UUIDs and IndexedDB hands records
-    // back in key order, so without this every list would appear in a
-    // meaningless, shuffled order.
+    // IDs are random UUIDs and IndexedDB hands records back in key order,
+    // so without sorting every list would appear shuffled. Which order is
+    // the coach's choice, kept in js/sort.js — the roster reads by jersey
+    // number, the rest keep the order they were typed in.
     async list() {
       const db = await getDB();
       const all = await db.getAll(storeName);
-      return all.filter((item) => !item.archived).sort(byCreatedAt);
+      return sortEntities(storeName, all.filter((item) => !item.archived));
     },
 
     async listArchived() {
       const db = await getDB();
       const all = await db.getAll(storeName);
-      return all.filter((item) => item.archived).sort(byCreatedAt);
+      return sortEntities(storeName, all.filter((item) => item.archived));
     },
 
     async add(fields) {

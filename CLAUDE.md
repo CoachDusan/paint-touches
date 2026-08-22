@@ -18,6 +18,7 @@ These encode decisions that are easy to break by accident and expensive to disco
 4. **Roster and Playbook entries are soft-archived, not deleted**, and possessions store name snapshots at write time. Mid-season roster changes must never alter a past game's numbers. The one exception is the explicit "delete all archived permanently" button — safe precisely because of those snapshots, and never something to do automatically.
 5. **Restore replaces, never merges.** Merging two copies of a season silently doubles every stat. `parseBackup()` refuses anything it can't fully vouch for rather than half-applying it.
 6. **`pointsForOutcome()` runs once**, when a possession closes, and the result is stored on the record. Nothing recomputes points later, so live and historical stats can never disagree.
+7. **Tap buttons never reorder themselves during a game.** The player/play grids are ordered by an explicit setting (`js/sort.js`), and it only changes when the coach changes it. A button that moves under a thumb mid-possession is a mis-tap, and a mis-tap is a wrong number in a real game.
 
 ## Architecture, and why
 
@@ -30,9 +31,12 @@ Vanilla HTML/CSS/ES modules. **No build step, no npm, no framework, no bundler**
 - `js/views/stats-panel.js` / `defense-stats-panel.js` / `game-stats.js` — shared renderers behind one Offense/Defense switch, so live and History markup can't drift
 - `js/views/live-tracking.js` — the sideline screen: touches → outcome, with and-1 and FT sub-flows
 - **Possessions vs. tag events.** A possession is a trip down the floor that ends in an outcome. A *quick tag* (e.g. "Lazy box-out") is an observation with no outcome and no PPP — its own `tagEvents` store, one record per player per occurrence. Don't force observations into the possession shape; anything deleting a game must delete both
+- `js/sort.js` — two different sorts that deliberately behave in opposite ways. The **list sort** (roster, plays, coverages) is a setting: it decides the order of the tap targets and is frozen until changed, per rule 7. The **table sort** (tap a stats column header) is the opposite — it *must* survive new data, because the live panel is rebuilt after every possession and a column you sorted by has to come back sorted with the new numbers in it. Both live in `localStorage`, not IndexedDB: they're per-iPad display settings and have no business travelling inside a backup file
 - `js/export.js` — pure string builders (summary / CSV / backup JSON) with no delivery logic, so they can be read and tested directly
 - `js/share.js` — the delivery side. Standalone mode has no Safari toolbar, so share and print must be triggered from in-app buttons; each route steps down share sheet → clipboard → on-screen text
 - `vendor/idb.js` — vendored via curl, not npm
+
+**Sorting defaults, and why they differ.** The roster reads by jersey number, like a scorebook. Everything else keeps the order it was typed in, because those lists are short, hand-ordered by the coach, and their button positions are already muscle memory — alphabetising them by default would silently rearrange a sideline the coach had already learned. Sorting by *activity* (most-touched player floats to the top) was considered and rejected for the same reason. The stats tables read the rendered cell text rather than the raw stats, which is what lets every table be sortable without each caller describing its own columns; it holds only because those cells are plain text.
 
 **Data model.** The unit is a *possession*: tap every player who touches the ball in the paint (repeat taps allowed, zero touches is valid and must count), then one outcome to close it — 2PM, 2PA, 3PM, 3PA, FT, TO. Made shots can attach an and-1 free throw to the same possession. PPP is the headline stat.
 

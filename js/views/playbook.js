@@ -11,6 +11,8 @@ import { Plays, Coverages, Mistakes, QuickTags } from "../models.js";
 const SECTIONS = [
   {
     key: "plays",
+    // Store name, which is also the key its sort order is remembered under.
+    storeName: "plays",
     tab: "Plays",
     config: {
       title: "Playbook",
@@ -23,6 +25,8 @@ const SECTIONS = [
   },
   {
     key: "coverages",
+    // Store name, which is also the key its sort order is remembered under.
+    storeName: "coverages",
     tab: "Coverages",
     config: {
       title: "PnR Coverages",
@@ -35,6 +39,8 @@ const SECTIONS = [
   },
   {
     key: "mistakes",
+    // Store name, which is also the key its sort order is remembered under.
+    storeName: "mistakes",
     tab: "Mistakes",
     config: {
       title: "PnR Mistakes",
@@ -57,6 +63,8 @@ const SECTIONS = [
   },
   {
     key: "tags",
+    // Store name, which is also the key its sort order is remembered under.
+    storeName: "quickTags",
     tab: "Tags",
     config: {
       title: "Quick Tags",
@@ -80,6 +88,11 @@ export function render(root) {
     const section = SECTIONS.find((s) => s.key === activeKey) || SECTIONS[0];
     renderEntityList(sectionRoot, {
       ...section.config,
+      // No jersey numbers here, so it's alphabetical or the order you
+      // typed them in — and typed order is the default, because these
+      // buttons' positions are already muscle memory on the sideline.
+      sortListKey: section.storeName,
+      sortOptions: ["added", "name"],
       renderRowLabel: (item, options) => {
         const assigned = item.coverageIds || [];
         if (!assigned.length) {
