@@ -36,6 +36,20 @@ Vanilla HTML/CSS/ES modules. **No build step, no npm, no framework, no bundler**
 - `js/share.js` — the delivery side. Standalone mode has no Safari toolbar, so share and print must be triggered from in-app buttons; each route steps down share sheet → clipboard → on-screen text
 - `vendor/idb.js` — vendored via curl, not npm
 
+**Sorting breakdowns by coverage.** The Mistakes list has a third sort the
+other lists don't: `coverage`. A breakdown stores the *ids* of the coverages
+it's assigned to, and ids have no order, so this is the one sort that can't
+be computed from the record alone — `sortEntities()` takes an optional
+context and `archivableList` fetches the coverage list to build it, but only
+when that sort is actually turned on, so the other four lists never pay for
+the extra read. Breakdowns rank by the first coverage they're assigned to,
+in whatever order the Coverages list is currently set to, and keep typed
+order inside each group. Anything assigned to no coverage (or only to
+archived ones) applies everywhere and can't sit inside a group, so it sinks
+to the bottom — the same rule as a player with no jersey number. Because
+this is the list sort, it also reorders the in-game breakdown buttons: with
+it on, the ones assigned to the coverage you called come first.
+
 **Sorting defaults, and why they differ.** The roster reads by jersey number, like a scorebook. Everything else keeps the order it was typed in, because those lists are short, hand-ordered by the coach, and their button positions are already muscle memory — alphabetising them by default would silently rearrange a sideline the coach had already learned. Sorting by *activity* (most-touched player floats to the top) was considered and rejected for the same reason. The stats tables read the rendered cell text rather than the raw stats, which is what lets every table be sortable without each caller describing its own columns; it holds only because those cells are plain text.
 
 **Data model.** The unit is a *possession*: tap every player who touches the ball in the paint (repeat taps allowed, zero touches is valid and must count), then one outcome to close it — 2PM, 2PA, 3PM, 3PA, FT, TO. Made shots can attach an and-1 free throw to the same possession. PPP is the headline stat.

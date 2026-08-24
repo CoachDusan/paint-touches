@@ -56,7 +56,7 @@ SEED = """
   req.onerror = () => reject(req.error);
   req.onsuccess = () => {
     const db = req.result;
-    const tx = db.transaction(["players","plays"], "readwrite");
+    const tx = db.transaction(["players","plays","coverages","mistakes"], "readwrite");
     const players = tx.objectStore("players");
     players.put({ id:"p1", name:"Zoran", number:"12", archived:false, createdAt:1 });
     players.put({ id:"p2", name:"Ana",   number:"9",  archived:false, createdAt:2 });
@@ -65,6 +65,17 @@ SEED = """
     const plays = tx.objectStore("plays");
     plays.put({ id:"y1", name:"Zipper", archived:false, createdAt:1 });
     plays.put({ id:"y2", name:"Horns",  archived:false, createdAt:2 });
+    // Coverages and breakdowns, planted rather than left to the app's own
+    // defaults: the defaults are assigned to no coverage at all, which is
+    // exactly the case the Coverage sort has nothing to say about.
+    const cov = tx.objectStore("coverages");
+    cov.put({ id:"c1", name:"Drop",   archived:false, createdAt:1 });
+    cov.put({ id:"c2", name:"Switch", archived:false, createdAt:2 });
+    const mis = tx.objectStore("mistakes");
+    mis.put({ id:"m1", name:"Foul",         archived:false, createdAt:1 });
+    mis.put({ id:"m2", name:"Went under",   archived:false, createdAt:2, coverageIds:["c2"] });
+    mis.put({ id:"m3", name:"Big late",     archived:false, createdAt:3, coverageIds:["c1"] });
+    mis.put({ id:"m4", name:"No tag",       archived:false, createdAt:4, coverageIds:["c1","c2"] });
     tx.oncomplete = () => { db.close(); resolve(true); };
     tx.onerror = () => reject(tx.error);
   };
@@ -72,6 +83,15 @@ SEED = """
 """
 
 ROW_LABELS = "[...document.querySelectorAll('.entity-list .list-row__main')].map(r=>r.textContent.trim())"
+# The mistakes rows carry coverage pills after the name, so read just the
+# first span — the name — rather than the whole row.
+ROW_NAMES = ("[...document.querySelectorAll('.entity-list .list-row__main')]"
+             ".map(r=>(r.querySelector('span')||r).textContent.trim())")
+CHIP_LABELS = """(label) => {
+  const card = [...document.querySelectorAll('.card')]
+    .find(c => c.querySelector('.section-label')?.textContent.includes(label));
+  return card ? [...card.querySelectorAll('.chip')].map(c => c.textContent.trim()) : null;
+}"""
 TILE_LABELS = "[...document.querySelectorAll('.player-grid .player-tile')].map(t=>t.textContent.trim())"
 # Playwright's :has-text() only works in its own selectors, not in
 # querySelectorAll, so finding a card by its heading is done in plain JS.
@@ -220,7 +240,40 @@ with sync_playwright() as pw:
     page.click('.sort-bar .segmented__btn[data-sort="name"]'); page.wait_for_timeout(500)
     check("plays sort A–Z on request", page.evaluate(ROW_LABELS), ["Horns", "Zipper"])
 
-    # A play list re-sorted between games must reach the game screen too.
+    # ---- 8. Breakdowns can be grouped by the coverage they belong to -----
+    # This is the third sort, offered on the Mistakes list only: a breakdown
+    # belongs to a coverage, so it can read in coverage order instead of
+    # typed order. Anything assigned to no coverage applies everywhere and
+    # can't sit inside a group, so it sinks to the bottom.
+    page.click('.segmented__btn[data-section="mistakes"]'); page.wait_for_timeout(600)
+    check("breakdowns keep typed order by default",
+          page.evaluate(ROW_NAMES),
+          ["Foul", "Went under", "Big late", "No tag"])
+    check("only the Mistakes list offers a Coverage sort",
+          page.evaluate("[...document.querySelectorAll('.sort-bar .segmented__btn')].map(b=>b.getAttribute('data-sort'))"),
+          ["added", "name", "coverage"])
+
+    page.click('.sort-bar .segmented__btn[data-sort="coverage"]'); page.wait_for_timeout(600)
+    check("Coverage groups them: Drop's, then Switch's, then the any-coverage ones",
+          page.evaluate(ROW_NAMES),
+          ["Big late", "No tag", "Went under", "Foul"])
+    page.screenshot(path=OUT+"sort-mistakes-coverage.png", full_page=True)
+
+    page.reload(wait_until="networkidle"); page.wait_for_timeout(900)
+    page.click('.tab-bar button[data-view="playbook"]'); page.wait_for_timeout(600)
+    page.click('.segmented__btn[data-section="mistakes"]'); page.wait_for_timeout(600)
+    check("the Coverage choice is remembered after closing the app",
+          page.evaluate(ROW_NAMES),
+          ["Big late", "No tag", "Went under", "Foul"])
+
+    # ---- 9. And it reaches the buttons you tap during a game -------------
+    page.click('.tab-bar button[data-view="game"]'); page.wait_for_timeout(700)
+    page.click('.side-toggle .segmented__btn[data-side="defense"]'); page.wait_for_timeout(500)
+    page.click('.chip-grid .chip:has-text("Drop")'); page.wait_for_timeout(500)
+    check("in-game breakdown buttons lead with the ones assigned to Drop",
+          page.evaluate(CHIP_LABELS, "What broke down?"),
+          ["No mistake", "Big late", "No tag", "Foul"])
+
     check("no console errors", errs, [])
     b.close()
 srv.terminate()

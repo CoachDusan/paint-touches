@@ -55,10 +55,43 @@ function byCreatedAt(a, b) {
   return (a.createdAt || 0) - (b.createdAt || 0);
 }
 
+// Mistakes are the one list whose order can't be read off the item alone:
+// a breakdown knows the *ids* of the coverages it belongs to, and ids have
+// no order. So this sort is handed the coverage list — in whatever order
+// the Coverages screen is currently set to — and ranks each breakdown by
+// the first coverage it's assigned to. The result is that the coverage bar
+// and the breakdown buttons underneath it read in the same order.
+//
+// A breakdown assigned to no coverage (or only to archived ones) applies
+// everywhere, so it can't sit inside any one group: it sinks to the bottom,
+// the same way a player with no jersey number does.
+function coverageRank(item, coverageOrder) {
+  const assigned = item.coverageIds || [];
+  let best = Number.POSITIVE_INFINITY;
+  for (const id of assigned) {
+    const rank = coverageOrder.get(id);
+    if (rank !== undefined && rank < best) best = rank;
+  }
+  return best;
+}
+
 export const LIST_SORTS = {
   number: { key: "number", label: "#", compare: (a, b) => jerseyOf(a) - jerseyOf(b) || byName(a, b) },
   name: { key: "name", label: "A–Z", compare: (a, b) => byName(a, b) || byCreatedAt(a, b) },
   added: { key: "added", label: "Added", compare: byCreatedAt },
+  coverage: {
+    key: "coverage",
+    label: "Coverage",
+    // Needs the coverage list to mean anything, which is why `sortEntities`
+    // takes a context and `archivableList` knows to go and fetch one.
+    needs: "coverages",
+    compare: (a, b, context) => {
+      const order = context?.coverageOrder || new Map();
+      // Inside one coverage the typed order stands: those button positions
+      // are already muscle memory, and grouping shouldn't reshuffle them.
+      return coverageRank(a, order) - coverageRank(b, order) || byCreatedAt(a, b);
+    },
+  },
 };
 
 // The roster reads like a scorebook by default. Everything else keeps the
@@ -84,10 +117,18 @@ export function setListSort(listKey, sortKey) {
   writePrefs(prefs);
 }
 
+// True when the chosen sort can't work from the items alone — currently
+// only "Coverage", which needs the coverage list. Callers check this before
+// paying for an extra database read they usually don't need.
+export function listSortNeeds(listKey) {
+  return LIST_SORTS[getListSort(listKey)].needs || null;
+}
+
 // Always returns a new array — callers hand us the result of a database
 // read and shouldn't have to care whether it was sorted in place.
-export function sortEntities(listKey, items) {
-  return [...items].sort(LIST_SORTS[getListSort(listKey)].compare);
+export function sortEntities(listKey, items, context = null) {
+  const sort = LIST_SORTS[getListSort(listKey)];
+  return [...items].sort((a, b) => sort.compare(a, b, context));
 }
 
 // ---------------------------------------------------------------------

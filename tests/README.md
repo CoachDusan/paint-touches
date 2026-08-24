@@ -80,6 +80,13 @@ The one that protects the sideline: **the buttons must not move on their
 own.** Tapping a player and closing a possession must leave every tile
 exactly where it was.
 
+**Coverage sort** — the third option, offered on the Mistakes list only.
+Plants two coverages and four breakdowns: one assigned to Drop, one to
+Switch, one to both, and one to nothing at all. Checks that Coverage groups
+them in coverage order with the any-coverage one last, that the choice
+survives a reload, and that it reaches the breakdown buttons on the game
+screen — where the ones assigned to the coverage you called come first.
+
 **Table sort** — tapping a stats column header. Checks the three-tap cycle
 (sort → reverse → back to default) and, most importantly, that a sorted
 column survives a new possession: the live panel rebuilds itself every time

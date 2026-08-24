@@ -3,7 +3,7 @@
 
 import { getDB } from "./db.js";
 import { uid } from "./utils.js";
-import { sortEntities } from "./sort.js";
+import { sortEntities, listSortNeeds } from "./sort.js";
 
 // ---------------------------------------------------------------------
 // Players and Plays are the same *shape*: a simple named record you can
@@ -13,6 +13,21 @@ import { sortEntities } from "./sort.js";
 // IndexedDB store.
 // ---------------------------------------------------------------------
 function archivableList(storeName) {
+  // Most sorts read everything they need off the record itself. "Coverage"
+  // doesn't — a breakdown stores coverage *ids*, and only the coverage list
+  // says what order those go in. So we fetch it, but only when that sort is
+  // actually the one turned on: the other four lists never pay for it.
+  async function sortContext() {
+    if (listSortNeeds(storeName) !== "coverages") return null;
+    const db = await getDB();
+    const coverages = await db.getAll("coverages");
+    return {
+      coverageOrder: new Map(
+        sortEntities("coverages", coverages.filter((c) => !c.archived)).map((c, i) => [c.id, i])
+      ),
+    };
+  }
+
   return {
     // IDs are random UUIDs and IndexedDB hands records back in key order,
     // so without sorting every list would appear shuffled. Which order is
@@ -21,13 +36,13 @@ function archivableList(storeName) {
     async list() {
       const db = await getDB();
       const all = await db.getAll(storeName);
-      return sortEntities(storeName, all.filter((item) => !item.archived));
+      return sortEntities(storeName, all.filter((item) => !item.archived), await sortContext());
     },
 
     async listArchived() {
       const db = await getDB();
       const all = await db.getAll(storeName);
-      return sortEntities(storeName, all.filter((item) => item.archived));
+      return sortEntities(storeName, all.filter((item) => item.archived), await sortContext());
     },
 
     async add(fields) {

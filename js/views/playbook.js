@@ -42,6 +42,10 @@ const SECTIONS = [
     // Store name, which is also the key its sort order is remembered under.
     storeName: "mistakes",
     tab: "Mistakes",
+    // The only list with a third option: breakdowns belong to coverages, so
+    // they can be grouped under the coverage they're logged against — which
+    // is also the order they'll appear in on the game screen.
+    sortOptions: ["added", "name", "coverage"],
     config: {
       title: "PnR Mistakes",
       itemNoun: "Mistake",
@@ -92,7 +96,7 @@ export function render(root) {
       // typed them in — and typed order is the default, because these
       // buttons' positions are already muscle memory on the sideline.
       sortListKey: section.storeName,
-      sortOptions: ["added", "name"],
+      sortOptions: section.sortOptions || ["added", "name"],
       renderRowLabel: (item, options) => {
         const assigned = item.coverageIds || [];
         if (!assigned.length) {
