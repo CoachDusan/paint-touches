@@ -96,7 +96,13 @@ export function renderStatsPanel(possessions) {
       statTile("Possessions", stats.overall.possessions),
       statTile("Turnovers", stats.overall.turnovers),
       statTile("TO rate", formatRatio(stats.overall.toRate)),
+      statTile("Fouls drawn", stats.overall.fouls),
     ]),
+
+    stats.overall.fouls > 0
+      ? el("div", { class: "stat-note" },
+          "Fouls are counted but left out of PPP — a non-shooting foul doesn't end the possession, so charging it as a scoreless trip would make drawing fouls look like bad offense. A trip that ended at the line is logged as free throws.")
+      : null,
 
     el("div", { class: "card" }, [
       el("div", { class: "section-label" }, "Paint touches vs. none"),

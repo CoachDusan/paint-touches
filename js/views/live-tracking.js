@@ -9,6 +9,7 @@ import {
   pointsForOutcome,
   OUTCOME_LABELS,
   DEFENSE_OUTCOME_LABELS,
+  OUTCOME_TONES,
   FT_COMBOS,
   QUARTERS,
   SIDES,
@@ -221,11 +222,11 @@ export async function render(root, game) {
       el("div", { class: "form-row" }, [
         el("button", { class: "btn", onclick: () => finalizePossession(outcome) }, "Skip"),
         el("button", {
-          class: "btn btn-primary",
+          class: "btn outcome-btn--make",
           onclick: () => finalizePossession(outcome, { andOne: { made: true } }),
         }, "Made"),
         el("button", {
-          class: "btn btn-danger",
+          class: "btn outcome-btn--miss",
           onclick: () => finalizePossession(outcome, { andOne: { made: false } }),
         }, "Missed"),
       ]),
@@ -274,17 +275,39 @@ export async function render(root, game) {
     }
 
     const labels = isDefense() ? DEFENSE_OUTCOME_LABELS : OUTCOME_LABELS;
-    // A forced turnover is a good result for the defense, so it shouldn't
-    // wear the same red as one you committed.
-    const toClass = isDefense() ? "btn outcome-btn btn-good" : "btn outcome-btn btn-danger";
 
+    // Three of these open a follow-up question instead of closing the
+    // possession: a make asks about the and-1, free throws ask makes/attempts.
+    const OPENS_SUB_FLOW = new Set(["2PM", "3PM", "FT"]);
+
+    const outcomeBtn = (code, wide = false) =>
+      el(
+        "button",
+        {
+          class: `btn outcome-btn outcome-btn--${OUTCOME_TONES[code]}${wide ? " outcome-btn--wide" : ""}`,
+          onclick: () => {
+            if (OPENS_SUB_FLOW.has(code)) {
+              state.subFlow = { outcome: code };
+              paint();
+            } else {
+              finalizePossession(code);
+            }
+          },
+        },
+        labels[code]
+      );
+
+    // Twos on the left, threes on the right, then the three ways a trip ends
+    // without a field-goal attempt. Fixed positions, same on both sides of
+    // the ball — see rule 7: a button that moves under a thumb is a mis-tap.
     return el("div", { class: "outcome-row" }, [
-      el("button", { class: "btn outcome-btn", onclick: () => { state.subFlow = { outcome: "2PM" }; paint(); } }, labels["2PM"]),
-      el("button", { class: "btn outcome-btn", onclick: () => finalizePossession("2PA") }, labels["2PA"]),
-      el("button", { class: "btn outcome-btn", onclick: () => { state.subFlow = { outcome: "3PM" }; paint(); } }, labels["3PM"]),
-      el("button", { class: "btn outcome-btn", onclick: () => finalizePossession("3PA") }, labels["3PA"]),
-      el("button", { class: "btn outcome-btn", onclick: () => { state.subFlow = { outcome: "FT" }; paint(); } }, labels["FT"]),
-      el("button", { class: toClass, onclick: () => finalizePossession("TO") }, labels["TO"]),
+      outcomeBtn("2PM"),
+      outcomeBtn("2PA"),
+      outcomeBtn("3PM"),
+      outcomeBtn("3PA"),
+      outcomeBtn("FT"),
+      outcomeBtn("FOUL"),
+      outcomeBtn("TO", true),
     ]);
   }
 

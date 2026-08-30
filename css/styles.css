@@ -12,6 +12,20 @@
   --good: #22c55e;
   --bad: #ef4444;
   --warn: #eab308;
+
+  /* Outcome colours. Each one is a bright text/border colour over a dark
+     tint of itself, so the button reads as a solid block of colour at arm's
+     length in a gym, and the label stays legible on a dim iPad. */
+  --make: #4ade80;
+  --make-tint: #0b2f1d;
+  --miss: #f87171;
+  --miss-tint: #3a1416;
+  --foul: #60a5fa;
+  --foul-tint: #11294d;
+  --turnover: #c084fc;
+  --turnover-tint: #2c1247;
+  --ft: #facc15;
+  --ft-tint: #33270a;
   /* Defensive side — deliberately not the offensive accent, so the two
      halves of the game screen can never be confused at a glance. */
   --defense: #38bdf8;
@@ -293,7 +307,9 @@ select {
 }
 
 .stat-tile {
-  flex: 1 1 120px;
+  /* Narrow enough that six tiles still sit on one row on a portrait iPad —
+     the offence strip gained a sixth when fouls did. They grow to fill. */
+  flex: 1 1 104px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -499,7 +515,7 @@ select {
   position: sticky;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   background: var(--bg);
   padding-top: 8px;
@@ -508,6 +524,52 @@ select {
 .outcome-btn {
   min-height: 56px;
   font-size: 0.95rem;
+  font-weight: 700;
+  border-width: 2px;
+}
+
+/* The turnover button fills the rest of its row rather than leaving a hole. */
+.outcome-btn--wide {
+  grid-column: span 2;
+}
+
+/* Colour by what happened, not by whether it was good news — green means
+   the ball went in on either side of the ball. See OUTCOME_TONES. */
+.outcome-btn--make {
+  color: var(--make);
+  border-color: var(--make);
+  background: var(--make-tint);
+}
+
+.outcome-btn--miss {
+  color: var(--miss);
+  border-color: var(--miss);
+  background: var(--miss-tint);
+}
+
+.outcome-btn--foul {
+  color: var(--foul);
+  border-color: var(--foul);
+  background: var(--foul-tint);
+}
+
+.outcome-btn--to {
+  color: var(--turnover);
+  border-color: var(--turnover);
+  background: var(--turnover-tint);
+}
+
+.outcome-btn--ft {
+  color: var(--ft);
+  border-color: var(--ft);
+  background: var(--ft-tint);
+}
+
+/* Narrow screens (a phone in a pinch): two per row, turnover across both. */
+@media (max-width: 600px) {
+  .outcome-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .outcome-sheet {

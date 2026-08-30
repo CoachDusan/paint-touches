@@ -35,10 +35,11 @@ export function buildSummaryText({ title, possessions, tagEvents = [], subtitle 
 
   if (subtitle) lines.push(subtitle);
 
-  if (off.overall.possessions > 0) {
+  if (off.overall.trips > 0) {
     lines.push("", "OFFENSE");
     lines.push(`PPP ${formatPPP(off.overall.points, off.overall.possessions)} · ${off.overall.possessions} poss · ${off.overall.points} pts`);
     lines.push(`Turnovers ${off.overall.turnovers} (${pct(off.overall.toRate)})`);
+    if (off.overall.fouls > 0) lines.push(`Fouls drawn ${off.overall.fouls} (not in PPP)`);
     lines.push(`Paint touch: ${formatPPP(off.touchSplit.withTouches.points, off.touchSplit.withTouches.possessions)} PPP (${off.touchSplit.withTouches.possessions} poss)`);
     lines.push(`No touch: ${formatPPP(off.touchSplit.noTouches.points, off.touchSplit.noTouches.possessions)} PPP (${off.touchSplit.noTouches.possessions} poss)`);
 
@@ -50,10 +51,11 @@ export function buildSummaryText({ title, possessions, tagEvents = [], subtitle 
     }
   }
 
-  if (def.overall.possessions > 0) {
+  if (def.overall.trips > 0) {
     lines.push("", "DEFENSE (pick & roll)");
     lines.push(`PPP allowed ${formatPPP(def.overall.points, def.overall.possessions)} · ${def.overall.possessions} poss`);
     lines.push(`Executed clean ${pct(def.overall.cleanRate)} · forced TOs ${def.overall.forcedTurnovers}`);
+    if (def.overall.fouls > 0) lines.push(`Fouls ${def.overall.fouls} (not in PPP)`);
     lines.push(`When clean: ${formatPPP(def.executionSplit.clean.points, def.executionSplit.clean.possessions)} · when broken: ${formatPPP(def.executionSplit.broken.points, def.executionSplit.broken.possessions)}`);
 
     if (def.byCoverage.length) {
@@ -92,13 +94,16 @@ export function buildSummaryText({ title, possessions, tagEvents = [], subtitle 
     }
   }
 
-  if (off.overall.possessions === 0 && def.overall.possessions === 0 && tags.length === 0) {
+  if (off.overall.trips === 0 && def.overall.trips === 0 && tags.length === 0) {
     lines.push("", "No possessions logged.");
   }
 
   // Says where the numbers came from, because a summary read out of context
   // invites being mistaken for the box score.
   lines.push("", "Counts only tracked possessions — not the full box score.");
+  if (off.overall.fouls > 0 || def.overall.fouls > 0) {
+    lines.push("Fouls are counted but not divided into PPP — a foul doesn't end a possession.");
+  }
   lines.push("Tracked with Paint Touches");
   return lines.join("\n");
 }

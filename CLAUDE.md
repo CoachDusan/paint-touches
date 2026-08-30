@@ -18,7 +18,16 @@ These encode decisions that are easy to break by accident and expensive to disco
 4. **Roster and Playbook entries are soft-archived, not deleted**, and possessions store name snapshots at write time. Mid-season roster changes must never alter a past game's numbers. The one exception is the explicit "delete all archived permanently" button — safe precisely because of those snapshots, and never something to do automatically.
 5. **Restore replaces, never merges.** Merging two copies of a season silently doubles every stat. `parseBackup()` refuses anything it can't fully vouch for rather than half-applying it.
 6. **`pointsForOutcome()` runs once**, when a possession closes, and the result is stored on the record. Nothing recomputes points later, so live and historical stats can never disagree.
-7. **Tap buttons never reorder themselves during a game.** The player/play grids are ordered by an explicit setting (`js/sort.js`), and it only changes when the coach changes it. A button that moves under a thumb mid-possession is a mis-tap, and a mis-tap is a wrong number in a real game.
+7. **A foul is a trip, not a possession.** Every stat bucket carries both
+   `trips` (everything tapped) and `possessions` (what ended a trip down the
+   floor). `endsPossession()` is the only place that distinction is defined,
+   and PPP — every PPP — divides by `possessions`. Counting a foul as a
+   0-point possession would punish an offense for drawing fouls and flatter a
+   defense for committing them. Counts of *how often something happened*
+   (breakdowns, coverage calls) read `trips`, so a breakdown that ended in a
+   foul is still a breakdown. If it sent someone to the line, that trip is
+   logged as FT instead, which is where the points come from.
+8. **Tap buttons never reorder themselves during a game.** The player/play grids are ordered by an explicit setting (`js/sort.js`), and it only changes when the coach changes it. A button that moves under a thumb mid-possession is a mis-tap, and a mis-tap is a wrong number in a real game.
 
 ## Architecture, and why
 
@@ -50,13 +59,21 @@ to the bottom — the same rule as a player with no jersey number. Because
 this is the list sort, it also reorders the in-game breakdown buttons: with
 it on, the ones assigned to the coverage you called come first.
 
+**Outcome colours are by event, not by good news.** Green always means the
+ball went in, on either side of the ball — so on defense the green button is
+the one you *didn't* want. That is deliberate: the tap keeps the same place
+and the same colour whichever bench is being tracked, and switching sides
+never costs a beat. `OUTCOME_TONES` in `possession.js` is the single source;
+CSS only paints what it names. Green = made, red = missed, blue = foul,
+purple = turnover, yellow = free throws.
+
 **Sorting defaults, and why they differ.** The roster reads by jersey number, like a scorebook. Everything else keeps the order it was typed in, because those lists are short, hand-ordered by the coach, and their button positions are already muscle memory — alphabetising them by default would silently rearrange a sideline the coach had already learned. Sorting by *activity* (most-touched player floats to the top) was considered and rejected for the same reason. The stats tables read the rendered cell text rather than the raw stats, which is what lets every table be sortable without each caller describing its own columns; it holds only because those cells are plain text.
 
 **Data model.** The unit is a *possession*: tap every player who touches the ball in the paint (repeat taps allowed, zero touches is valid and must count), then one outcome to close it — 2PM, 2PA, 3PM, 3PA, FT, TO. Made shots can attach an and-1 free throw to the same possession. PPP is the headline stat.
 
 ## Verifying changes
 
-**Run `python3 tests/run_all.py` before shipping anything** — ten suites, ~240 assertions, about 90 seconds. See `tests/README.md` for what each covers and how to add more.
+**Run `python3 tests/run_all.py` before shipping anything** — thirteen suites, ~280 assertions, about two minutes. See `tests/README.md` for what each covers and how to add more.
 
 There is no test framework and no Node here, so these drive a real browser (Playwright via `pip3`, not Homebrew) against a real local server. They cover the things unit tests would miss: database upgrades that must not eat existing games, stats that must not blend both teams' points, and offline behaviour tested by actually severing the network. Re-verify against the live URL after deploying.
 

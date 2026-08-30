@@ -3,13 +3,24 @@
 // frozen possession list) — same function, same math, so live and
 // historical numbers can never disagree with each other.
 
-import { QUARTERS, SIDES, sideOf, NO_MISTAKE } from "./possession.js";
+import { QUARTERS, SIDES, sideOf, endsPossession, NO_MISTAKE } from "./possession.js";
 
+// Two totals, not one. `trips` is everything that was tapped; `possessions`
+// is only what actually ended a trip down the floor, and it is the only
+// thing PPP ever divides by. A foul lands in `trips` and `fouls` alone —
+// see endsPossession() for why. Anything counting *how often something
+// happened* (breakdowns, coverage calls) reads `trips`; anything dividing
+// points reads `possessions`.
 function emptyBucket() {
-  return { points: 0, possessions: 0, turnovers: 0 };
+  return { points: 0, possessions: 0, trips: 0, turnovers: 0, fouls: 0 };
 }
 
 function add(bucket, possession) {
+  bucket.trips += 1;
+  if (!endsPossession(possession.outcome)) {
+    bucket.fouls += 1;
+    return;
+  }
   bucket.points += possession.points;
   bucket.possessions += 1;
   if (possession.outcome === "TO") bucket.turnovers += 1;
@@ -39,6 +50,8 @@ export function computeStats(allPossessions) {
   const byPlayer = new Map();
 
   for (const p of possessions) {
+    const closed = endsPossession(p.outcome);
+
     add(overall, p);
     add(p.touches.length > 0 ? withTouches : noTouches, p);
 
@@ -55,7 +68,7 @@ export function computeStats(allPossessions) {
     }
     const playBucket = byPlay.get(playKey);
     add(playBucket, p);
-    if (p.touches.length > 0) playBucket.touchPossessions += 1;
+    if (closed && p.touches.length > 0) playBucket.touchPossessions += 1;
 
     // Every player who touched this possession shares "credit" for it —
     // counted once each, even if a player touched the ball twice in the
@@ -74,8 +87,11 @@ export function computeStats(allPossessions) {
         });
       }
       const playerBucket = byPlayer.get(t.playerId);
+      // The touch is real either way — he touched the paint, foul or not —
+      // so it counts. What he can't be given is a share of a possession
+      // that never ended, which would put a 0 in his PPP for nothing.
       playerBucket.touches += 1;
-      if (!seen.has(t.playerId)) {
+      if (!seen.has(t.playerId) && closed) {
         seen.add(t.playerId);
         playerBucket.possessionsTouched += 1;
         playerBucket.points += p.points;
@@ -161,19 +177,20 @@ export function computeDefenseStats(allPossessions) {
     add(quarterBucket, p);
     if (!isClean(p)) quarterBucket.mistakes += 1;
 
+
     const coverageKey = p.coverage?.coverageId ?? "unknown";
     if (!byCoverage.has(coverageKey)) {
       byCoverage.set(coverageKey, {
         name: p.coverage?.coverageName || "Unrecorded",
         ...emptyBucket(),
-        cleanPossessions: 0,
+        cleanTrips: 0,
         forcedTurnovers: 0,
         breakdowns: new Map(),
       });
     }
     const coverageBucket = byCoverage.get(coverageKey);
     add(coverageBucket, p);
-    if (isClean(p)) coverageBucket.cleanPossessions += 1;
+    if (isClean(p)) coverageBucket.cleanTrips += 1;
     if (p.outcome === "TO") coverageBucket.forcedTurnovers += 1;
 
     if (isClean(p)) continue;
@@ -232,17 +249,20 @@ export function computeDefenseStats(allPossessions) {
   }
 
   const quarterOrder = new Map(QUARTERS.map((q, i) => [q, i]));
-  const share = (n) => (overall.possessions ? n / overall.possessions : null);
+  // How often something happened is a share of every trip you logged; a
+  // turnover you forced is a share of the possessions that actually ended.
+  const shareOfTrips = (n) => (overall.trips ? n / overall.trips : null);
+  const shareOfPossessions = (n) => (overall.possessions ? n / overall.possessions : null);
 
   return {
     overall: {
       ...overall,
       ppp: ppp(overall),
       forcedTurnovers,
-      forcedTurnoverRate: share(forcedTurnovers),
-      mistakes: broken.possessions,
-      mistakeRate: share(broken.possessions),
-      cleanRate: share(clean.possessions),
+      forcedTurnoverRate: shareOfPossessions(forcedTurnovers),
+      mistakes: broken.trips,
+      mistakeRate: shareOfTrips(broken.trips),
+      cleanRate: shareOfTrips(clean.trips),
       unassigned,
     },
     // The cost of a breakdown, in the only currency that matters. If these
@@ -257,7 +277,7 @@ export function computeDefenseStats(allPossessions) {
         quarter,
         ...b,
         ppp: ppp(b),
-        mistakeRate: b.possessions ? b.mistakes / b.possessions : null,
+        mistakeRate: b.trips ? b.mistakes / b.trips : null,
       }))
       .sort((a, b) => (quarterOrder.get(a.quarter) ?? 99) - (quarterOrder.get(b.quarter) ?? 99)),
     byCoverage: [...byCoverage.entries()]
@@ -265,28 +285,35 @@ export function computeDefenseStats(allPossessions) {
         id,
         name: b.name,
         possessions: b.possessions,
+        trips: b.trips,
+        fouls: b.fouls,
         points: b.points,
         ppp: ppp(b),
-        cleanRate: b.possessions ? b.cleanPossessions / b.possessions : null,
+        cleanRate: b.trips ? b.cleanTrips / b.trips : null,
         forcedTurnoverRate: b.possessions ? b.forcedTurnovers / b.possessions : null,
         breakdowns: [...b.breakdowns.entries()]
           .map(([id, m]) => ({
             id,
             name: m.name,
-            count: m.possessions,
-            share: b.possessions ? m.possessions / b.possessions : null,
+            // `count` is how many times it happened, `possessions` is what
+            // its PPP divides by — the same breakdown can do both, and a
+            // foul lands in one but not the other.
+            count: m.trips,
+            possessions: m.possessions,
+            share: b.trips ? m.trips / b.trips : null,
             points: m.points,
             ppp: ppp(m),
           }))
           .sort((a, b2) => b2.count - a.count),
       }))
-      .sort((a, b) => b.possessions - a.possessions),
+      .sort((a, b) => b.trips - a.trips),
     byMistake: [...byMistake.entries()]
       .map(([id, b]) => ({
         id,
         name: b.name,
-        count: b.possessions,
-        share: share(b.possessions),
+        count: b.trips,
+        possessions: b.possessions,
+        share: shareOfTrips(b.trips),
         points: b.points,
         ppp: ppp(b),
       }))
@@ -296,7 +323,8 @@ export function computeDefenseStats(allPossessions) {
         id,
         name: b.name,
         number: b.number,
-        mistakes: b.possessions,
+        mistakes: b.trips,
+        possessions: b.possessions,
         points: b.points,
         ppp: ppp(b),
         breakdowns: [...b.breakdowns.entries()]

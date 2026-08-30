@@ -38,7 +38,7 @@ function playerBlock(player, gameStart) {
     el("div", { class: "group-block__head" }, [
       el("strong", {}, `#${player.number || "--"} ${player.name}`),
       el("span", { class: "pill" }, `${player.mistakes} breakdown${player.mistakes === 1 ? "" : "s"}`),
-      el("span", { class: "pill" }, `${formatPPP(player.points, player.mistakes)} allowed`),
+      el("span", { class: "pill" }, `${formatPPP(player.points, player.possessions)} allowed`),
       toggle,
     ]),
     table(
@@ -98,8 +98,14 @@ export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart
       statTile("Points allowed", stats.overall.points),
       statTile("Possessions", stats.overall.possessions),
       statTile("Forced TOs", stats.overall.forcedTurnovers),
+      statTile("Fouls", stats.overall.fouls),
       statTile("Executed clean", formatRatio(stats.overall.cleanRate)),
     ]),
+
+    stats.overall.fouls > 0
+      ? el("div", { class: "stat-note" },
+          "Fouls are counted but left out of PPP allowed — a non-shooting foul doesn't end their possession. If it sent them to the line, that trip is logged as free throws.")
+      : null,
 
     // The whole point of logging breakdowns: what do they actually cost?
     // If these two numbers sit on top of each other, the mistakes being
@@ -155,7 +161,7 @@ export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart
                     el("td", {}, m.name),
                     el("td", {}, String(m.count)),
                     el("td", {}, formatRatio(m.share)),
-                    el("td", {}, formatPPP(m.points, m.count)),
+                    el("td", {}, formatPPP(m.points, m.possessions)),
                   ])
                 ),
                 `def-coverage-breakdowns-${c.name}`
@@ -175,7 +181,7 @@ export function renderDefenseStatsPanel(possessions, tagEvents = [], { gameStart
                 el("td", {}, m.name),
                 el("td", {}, String(m.count)),
                 el("td", {}, formatRatio(m.share)),
-                el("td", {}, formatPPP(m.points, m.count)),
+                el("td", {}, formatPPP(m.points, m.possessions)),
               ])
             ),
             "def-mistake"

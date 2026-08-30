@@ -34,6 +34,7 @@ PATH — on this machine that's `~/Library/Python/3.9/bin`.
 | Suite | Covers |
 |---|---|
 | `test_turnovers.py` | Turnover counting and TO rate across every offensive breakdown |
+| `test_fouls.py` | That a foul is counted everywhere a count is honest but **never enters a PPP denominator**, on both sides of the ball |
 | `test_stage1.py` | **v1 → v2 database upgrade** with a real game planted first; coverage/mistake seeding; stable list ordering |
 | `test_stage2.py` | Defensive tracking flow, and that defensive possessions **don't contaminate offensive PPP** |
 | `test_stage3.py` | Defensive stats maths; the clean-vs-broken split; per-player caveat |

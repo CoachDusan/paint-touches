@@ -69,7 +69,11 @@ with sync_playwright() as pw:
           page.evaluate("!!document.querySelector('.outcome-row')"), True)
     check("defensive outcome wording",
           page.evaluate("[...document.querySelectorAll('.outcome-row button')].map(b=>b.textContent)"),
-          ["2PT Allowed","2PT Missed","3PT Allowed","3PT Missed","Free Throws","Forced TO"])
+          ["2PT Made","2PT Missed","3PT Made","3PT Missed","Free Throws","Foul","Forced TO"])
+    check("outcome buttons are colour-coded by event, same on both sides",
+          page.evaluate("[...document.querySelectorAll('.outcome-row button')].map(b=>[...b.classList].find(c=>c.startsWith('outcome-btn--')&&c!=='outcome-btn--wide'))"),
+          ["outcome-btn--make","outcome-btn--miss","outcome-btn--make","outcome-btn--miss",
+           "outcome-btn--ft","outcome-btn--foul","outcome-btn--to"])
 
     check("no player picker before a mistake is chosen",
           page.evaluate("[...document.querySelectorAll('.section-label')].map(e=>e.textContent).includes('Who made it?')"), False)
@@ -80,7 +84,7 @@ with sync_playwright() as pw:
     page.click('.player-tile:has-text("Luka")'); page.wait_for_timeout(250)
     check("warning clears once a player is picked", "unassigned" in page.text_content(".live-tracking"), False)
     page.screenshot(path=OUT+"stage2-defense.png", full_page=True)
-    page.click('.outcome-row button:has-text("3PT Allowed")'); page.wait_for_timeout(250)
+    page.click('.outcome-row button:has-text("3PT Made")'); page.wait_for_timeout(250)
     page.click('.outcome-sheet button:has-text("Skip")'); page.wait_for_timeout(500)
 
     check("coverage stayed selected for the next possession",

@@ -16,6 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # is last because it waits on a service worker install.
 ORDER = [
     "test_turnovers.py",
+    "test_fouls.py",
     "test_stage1.py",
     "test_stage2.py",
     "test_stage3.py",
