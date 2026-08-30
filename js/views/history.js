@@ -124,6 +124,26 @@ export async function render(root) {
     render(root);
   }
 
+  // Deleting one game, rather than all of them. Offered only from inside a
+  // game's own screen — never from a row in the list — so you have to have
+  // the game open, with its date and score in front of you, before the
+  // button exists at all. A delete on a tappable list row is one thumb-slip
+  // away from destroying the wrong night's work.
+  async function deleteGame(game) {
+    const summary = summaries.find((s) => s.game.id === game.id);
+    const who = game.opponent ? `vs ${game.opponent}` : "this game";
+    const n = summary.possessions.length;
+    const t = summary.tagEvents.length;
+    if (!confirm(
+      `Permanently delete ${who} — ${formatDate(game.date)}?\n\n` +
+      `${n} possession${n === 1 ? "" : "s"}` +
+      `${t ? ` and ${t} quick tag${t === 1 ? "" : "s"}` : ""} will go with it, ` +
+      `and this game will drop out of your season totals.\n\nThis cannot be undone.`
+    )) return;
+    await Games.remove(game.id);
+    await render(root);
+  }
+
   function showList() {
     document.getElementById("app-bar-context").textContent = "";
     root.replaceChildren(
@@ -200,6 +220,17 @@ export async function render(root) {
           buildCsv: () => buildCSV([summary]),
           filenameBase: `paint-touches-${game.date}${game.opponent ? "-" + game.opponent.replace(/[^a-z0-9]+/gi, "-").toLowerCase() : ""}`,
         }),
+        // Last thing on the screen, under the exports, because the safe
+        // move before deleting a game is to save a copy of it first.
+        el("div", { class: "card" }, [
+          el("div", { class: "section-label" }, "Delete"),
+          el("div", { class: "stat-note" },
+            "Removes this game and every possession and quick tag in it. Your season totals will change. Export or back up first — there is no undo."),
+          el("button", {
+            class: "btn btn-danger btn-block",
+            onclick: () => deleteGame(game),
+          }, "Delete this game"),
+        ]),
       ])
     );
   }

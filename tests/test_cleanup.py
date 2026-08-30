@@ -51,12 +51,15 @@ with sync_playwright() as pw:
           page.evaluate("""[...document.querySelectorAll('button')].some(b=>b.textContent.includes('Delete all 2 archived'))"""), True)
 
     # Two completed games, one still in progress, all with possessions.
-    for opp in ["Game A","Game B"]:
+    # Game A gets two possessions, Game B one, so deleting A alone is
+    # provable: the possession count has to land on B's single record.
+    for opp, n in [("Game A", 2), ("Game B", 1)]:
         page.click('.tab-bar button[data-view="game"]'); page.wait_for_timeout(300)
         page.fill('[name="opponent"]', opp)
         page.click('button:has-text("Start Game")'); page.wait_for_timeout(500)
-        page.click('.player-tile:has-text("Marko")')
-        page.click('.outcome-row button:has-text("2PT Miss")'); page.wait_for_timeout(400)
+        for _ in range(n):
+            page.click('.player-tile:has-text("Marko")')
+            page.click('.outcome-row button:has-text("2PT Miss")'); page.wait_for_timeout(400)
         page.click('button:has-text("End Game")'); page.wait_for_timeout(400)
         page.click('button:has-text("End without score")'); page.wait_for_timeout(700)
 
@@ -85,7 +88,7 @@ with sync_playwright() as pw:
 
     before = counts()
     check("3 games before clearing", before["games"], 3)
-    check("3 possessions before clearing", before["possessions"], 3)
+    check("4 possessions before clearing", before["possessions"], 4)
     check("4 player records before deleting archived", before["players"], 4)
 
     # Clear history
@@ -93,6 +96,27 @@ with sync_playwright() as pw:
     check("two completed games listed",
           page.evaluate("[...document.querySelectorAll('.list-row--tappable')].length"), 2)
     page.screenshot(path=OUT+"cleanup-history.png", full_page=True)
+
+    # --- Deleting ONE game, from inside that game's own screen ---
+    check("no delete button on the list itself",
+          page.evaluate("""[...document.querySelectorAll('button')].some(b=>b.textContent==='Delete this game')"""), False)
+    page.click('.list-row--tappable:has-text("Game A")'); page.wait_for_timeout(600)
+    check("delete offered inside the game",
+          page.evaluate("""[...document.querySelectorAll('button')].some(b=>b.textContent==='Delete this game')"""), True)
+    page.screenshot(path=OUT+"cleanup-game-detail.png", full_page=True)
+    page.click('button:has-text("Delete this game")'); page.wait_for_timeout(900)
+
+    one_gone = counts()
+    check("only that game was deleted", one_gone["games"], 2)
+    check("its possessions went with it", one_gone["possessions"], 2)
+    check("the in-progress game was not touched", one_gone["inProgress"], 1)
+    check("back on the list after deleting",
+          page.evaluate("[...document.querySelectorAll('.list-row--tappable')].length"), 1)
+    check("the surviving game is the other one",
+          "Game B" in page.text_content(".screen"), True)
+    check("the deleted game is gone from the list",
+          "Game A" in page.text_content(".screen"), False)
+
     page.click('button:has-text("Clear all history")'); page.wait_for_timeout(900)
 
     after = counts()

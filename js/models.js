@@ -246,25 +246,40 @@ export const Games = {
   async clearCompleted() {
     const db = await getDB();
     const games = await db.getAll("games");
-    const doomedGames = games.filter((g) => g.status === "completed").map((g) => g.id);
-    if (doomedGames.length === 0) return 0;
+    return purgeGames(db, games.filter((g) => g.status === "completed").map((g) => g.id));
+  },
 
-    const doomed = new Set(doomedGames);
-    const possessions = await db.getAll("possessions");
-    const doomedPossessions = possessions.filter((p) => doomed.has(p.gameId)).map((p) => p.id);
-    const events = await db.getAll("tagEvents");
-    const doomedEvents = events.filter((e) => doomed.has(e.gameId)).map((e) => e.id);
-
-    // All three stores in one transaction, so it can't half-succeed and
-    // leave possessions or tag events pointing at a game that's gone.
-    const tx = db.transaction(["games", "possessions", "tagEvents"], "readwrite");
-    doomedGames.forEach((id) => tx.objectStore("games").delete(id));
-    doomedPossessions.forEach((id) => tx.objectStore("possessions").delete(id));
-    doomedEvents.forEach((id) => tx.objectStore("tagEvents").delete(id));
-    await tx.done;
-    return doomedGames.length;
+  // Deletes one game and everything logged in it. Identical to
+  // clearCompleted() except in scope, and deliberately sharing its
+  // transaction: a game whose possessions outlived it would go on dragging
+  // every season number with nothing left to open and inspect.
+  async remove(id) {
+    const db = await getDB();
+    return purgeGames(db, [id]);
   },
 };
+
+// Removes the named games together with their possessions and tag events.
+// All three stores in one transaction, so it can never half-succeed and
+// leave possessions or tag events pointing at a game that's gone. Anything
+// that deletes a game must go through here — see the possessions-vs-tag-
+// events note in CLAUDE.md.
+async function purgeGames(db, gameIds) {
+  if (gameIds.length === 0) return 0;
+  const doomed = new Set(gameIds);
+
+  const possessions = await db.getAll("possessions");
+  const doomedPossessions = possessions.filter((p) => doomed.has(p.gameId)).map((p) => p.id);
+  const events = await db.getAll("tagEvents");
+  const doomedEvents = events.filter((e) => doomed.has(e.gameId)).map((e) => e.id);
+
+  const tx = db.transaction(["games", "possessions", "tagEvents"], "readwrite");
+  gameIds.forEach((id) => tx.objectStore("games").delete(id));
+  doomedPossessions.forEach((id) => tx.objectStore("possessions").delete(id));
+  doomedEvents.forEach((id) => tx.objectStore("tagEvents").delete(id));
+  await tx.done;
+  return gameIds.length;
+}
 
 // ---------------------------------------------------------------------
 // Possessions — the core record. Each one is written once it's closed and
