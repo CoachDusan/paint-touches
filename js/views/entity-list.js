@@ -27,6 +27,7 @@ export function renderEntityList(root, config) {
     archivedItems: [],
     showArchived: false,
     formMode: null, // null | "add" | { edit: id }
+    reordering: false,
     options: {},
   };
 
@@ -182,6 +183,56 @@ export function renderEntityList(root, config) {
     ]);
   }
 
+  const canReorder = () =>
+    !!config.sortListKey && typeof config.api.reorder === "function" && state.items.length > 1;
+
+  // Entering Reorder freezes the list into exactly the order you are looking
+  // at right now and switches the sort to Custom. Both halves matter: without
+  // the freeze you'd start from nowhere, and without the switch a nudge under
+  // A–Z would appear to do nothing at all, because A–Z would just re-sort it
+  // straight back.
+  async function startReorder() {
+    await config.api.reorder(state.items.map((item) => item.id));
+    setListSort(config.sortListKey, "custom");
+    state.reordering = true;
+    state.formMode = null;
+    state.showArchived = false;
+    await load();
+  }
+
+  // Swap with the neighbour, redraw immediately, then save. Redrawing first
+  // keeps the arrows feeling instant; the write is small and can't fail
+  // halfway, because reorder() puts every record in one transaction.
+  async function move(index, delta) {
+    const target = index + delta;
+    if (target < 0 || target >= state.items.length) return;
+    const items = state.items;
+    [items[index], items[target]] = [items[target], items[index]];
+    paint();
+    await config.api.reorder(items.map((item) => item.id));
+  }
+
+  function buildReorderRow(item, index) {
+    const last = state.items.length - 1;
+    return el("li", { class: "list-row" }, [
+      el("span", { class: "list-row__main" }, config.renderRowLabel(item, state.options)),
+      el("span", { class: "list-row__actions" }, [
+        el("button", {
+          class: "btn btn-sm",
+          disabled: index === 0 ? "" : null,
+          "aria-label": "Move up",
+          onclick: () => move(index, -1),
+        }, "\u25b2"),
+        el("button", {
+          class: "btn btn-sm",
+          disabled: index === last ? "" : null,
+          "aria-label": "Move down",
+          onclick: () => move(index, 1),
+        }, "\u25bc"),
+      ]),
+    ]);
+  }
+
   // The order chosen here is the order the tap buttons appear in during a
   // game — that's the whole point of it, so it says so out loud.
   function buildSortBar() {
@@ -206,16 +257,42 @@ export function renderEntityList(root, config) {
   }
 
   function paint() {
+    if (state.reordering) {
+      root.replaceChildren(
+        el("div", { class: "screen" }, [
+          el("div", { class: "list-toolbar" }, [
+            el("h1", { class: "screen-title" }, config.title),
+            el("button", {
+              class: "btn btn-primary btn-sm",
+              onclick: async () => {
+                state.reordering = false;
+                await load();
+              },
+            }, "Done"),
+          ]),
+          el("div", { class: "stat-note" },
+            `Tap \u25b2 and \u25bc to move a ${config.itemNoun.toLowerCase()}. This is the order the buttons will appear in during a game, and it stays put until you change it again.`),
+          el("ul", { class: "entity-list" }, state.items.map(buildReorderRow)),
+        ])
+      );
+      return;
+    }
+
     const children = [
       el("div", { class: "list-toolbar" }, [
         el("h1", { class: "screen-title" }, config.title),
-        el("button", {
-          class: "btn btn-primary btn-sm",
-          onclick: () => {
-            state.formMode = "add";
-            paint();
-          },
-        }, `+ Add ${config.itemNoun}`),
+        el("span", { class: "list-row__actions" }, [
+          canReorder()
+            ? el("button", { class: "btn btn-sm", onclick: startReorder }, "Reorder")
+            : null,
+          el("button", {
+            class: "btn btn-primary btn-sm",
+            onclick: () => {
+              state.formMode = "add";
+              paint();
+            },
+          }, `+ Add ${config.itemNoun}`),
+        ]),
       ]),
     ];
 

@@ -21,6 +21,7 @@ ORDER = [
     "test_stage2.py",
     "test_stage3.py",
     "test_sorting.py",
+    "test_reorder.py",
     "test_breakdowns.py",
     "test_tags.py",
     "test_stage5.py",

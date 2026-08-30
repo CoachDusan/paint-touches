@@ -133,7 +133,7 @@ with sync_playwright() as pw:
 
     # ---------- Real UI: build a game, then export it ----------
     page.click('.tab-bar button[data-view="roster"]')
-    page.click('.list-toolbar button'); page.fill('.entity-form [name="number"]', "4")
+    page.click('.list-toolbar button:has-text("+ Add")'); page.fill('.entity-form [name="number"]', "4")
     page.fill('.entity-form [name="name"]', "Marko")
     page.click('.entity-form button[type="submit"]'); page.wait_for_timeout(300)
     page.click('.tab-bar button[data-view="game"]')

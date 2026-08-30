@@ -236,7 +236,7 @@ with sync_playwright() as pw:
           page.evaluate(ROW_LABELS), ["Zipper", "Horns"])
     check("plays are not offered a number sort — they have no numbers",
           page.evaluate("[...document.querySelectorAll('.sort-bar .segmented__btn')].map(b=>b.getAttribute('data-sort'))"),
-          ["added", "name"])
+          ["added", "name", "custom"])
     page.click('.sort-bar .segmented__btn[data-sort="name"]'); page.wait_for_timeout(500)
     check("plays sort A–Z on request", page.evaluate(ROW_LABELS), ["Horns", "Zipper"])
 
@@ -251,7 +251,7 @@ with sync_playwright() as pw:
           ["Foul", "Went under", "Big late", "No tag"])
     check("only the Mistakes list offers a Coverage sort",
           page.evaluate("[...document.querySelectorAll('.sort-bar .segmented__btn')].map(b=>b.getAttribute('data-sort'))"),
-          ["added", "name", "coverage"])
+          ["added", "name", "coverage", "custom"])
 
     page.click('.sort-bar .segmented__btn[data-sort="coverage"]'); page.wait_for_timeout(600)
     check("Coverage groups them: Drop's, then Switch's, then the any-coverage ones",

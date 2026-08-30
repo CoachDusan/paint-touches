@@ -13,7 +13,7 @@ export function render(root) {
     renderRowLabel: (player) => `#${player.number || "--"}  ${player.name}`,
     // This order is also the order of the player buttons during a game.
     sortListKey: "players",
-    sortOptions: ["number", "name", "added"],
+    sortOptions: ["number", "name", "added", "custom"],
     api: Players,
   });
 }

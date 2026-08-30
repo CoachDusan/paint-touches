@@ -67,6 +67,25 @@ function archivableList(storeName) {
       return updated;
     },
 
+    // Writes a hand-arranged order onto the records themselves, as
+    // `position`. Deliberately not stored with the other sort settings in
+    // localStorage: which sort is switched on is a per-iPad display choice,
+    // but the arrangement is work the coach did, so it belongs in a backup
+    // and has to survive being restored onto a different iPad.
+    async reorder(orderedIds) {
+      const db = await getDB();
+      const all = await db.getAll(storeName);
+      const byId = new Map(all.map((item) => [item.id, item]));
+
+      const tx = db.transaction(storeName, "readwrite");
+      orderedIds.forEach((id, index) => {
+        const existing = byId.get(id);
+        if (existing) tx.store.put({ ...existing, position: index });
+      });
+      await tx.done;
+      return orderedIds.length;
+    },
+
     async archive(id) {
       return this.update(id, { archived: true, archivedAt: Date.now() });
     },

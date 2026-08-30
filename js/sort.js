@@ -13,7 +13,9 @@
 //
 // Preferences live in localStorage, not IndexedDB: they're per-iPad
 // display settings, not season data, and they have no business travelling
-// inside a backup file.
+// inside a backup file. The one thing that does live in the database is the
+// hand-arranged "Custom" order itself — see positionOf() below. Which sort
+// is switched on is a setting; the arrangement is work the coach did.
 
 const STORE_KEY = "paint-touches:sort-prefs";
 
@@ -75,10 +77,24 @@ function coverageRank(item, coverageOrder) {
   return best;
 }
 
+// A hand-arranged order lives in `position` on the record itself, written
+// by the Reorder mode on the Roster and Playbook screens. Anything without
+// one sinks below everything that has one — which is what puts a newly
+// added play at the bottom of your arrangement instead of somewhere random
+// in the middle of it.
+function positionOf(item) {
+  return Number.isFinite(item.position) ? item.position : Number.POSITIVE_INFINITY;
+}
+
 export const LIST_SORTS = {
   number: { key: "number", label: "#", compare: (a, b) => jerseyOf(a) - jerseyOf(b) || byName(a, b) },
   name: { key: "name", label: "A–Z", compare: (a, b) => byName(a, b) || byCreatedAt(a, b) },
   added: { key: "added", label: "Added", compare: byCreatedAt },
+  custom: {
+    key: "custom",
+    label: "Custom",
+    compare: (a, b) => positionOf(a) - positionOf(b) || byCreatedAt(a, b),
+  },
   coverage: {
     key: "coverage",
     label: "Coverage",

@@ -37,7 +37,7 @@ with sync_playwright() as pw:
     # Four players; archive two of them.
     page.click('.tab-bar button[data-view="roster"]')
     for num, name in [("4","Marko"),("5","Luka"),("6","Old One"),("7","Old Two")]:
-        page.click('.list-toolbar button'); page.fill('.entity-form [name="number"]', num)
+        page.click('.list-toolbar button:has-text("+ Add")'); page.fill('.entity-form [name="number"]', num)
         page.fill('.entity-form [name="name"]', name)
         page.click('.entity-form button[type="submit"]'); page.wait_for_timeout(220)
     for name in ["Old One","Old Two"]:

@@ -67,13 +67,25 @@ never costs a beat. `OUTCOME_TONES` in `possession.js` is the single source;
 CSS only paints what it names. Green = made, red = missed, blue = foul,
 purple = turnover, yellow = free throws.
 
+**Hand-arranged order (`custom`).** The one list sort whose data lives in
+IndexedDB rather than `localStorage`. `position` is written onto each record
+by `reorder()` in `models.js`, because an arrangement is work the coach did —
+it belongs in a backup and has to survive being restored onto another iPad —
+whereas *which* sort is switched on stays a per-iPad display setting. Entering
+Reorder mode seeds `position` from the currently visible order and flips the
+sort to `custom`; without that flip, nudging a row under A–Z would appear to
+do nothing, because A–Z would re-sort it straight back. A record with no
+`position` sorts below every record that has one, which is what puts a newly
+added play at the bottom of the arrangement instead of somewhere random in
+the middle of it.
+
 **Sorting defaults, and why they differ.** The roster reads by jersey number, like a scorebook. Everything else keeps the order it was typed in, because those lists are short, hand-ordered by the coach, and their button positions are already muscle memory — alphabetising them by default would silently rearrange a sideline the coach had already learned. Sorting by *activity* (most-touched player floats to the top) was considered and rejected for the same reason. The stats tables read the rendered cell text rather than the raw stats, which is what lets every table be sortable without each caller describing its own columns; it holds only because those cells are plain text.
 
 **Data model.** The unit is a *possession*: tap every player who touches the ball in the paint (repeat taps allowed, zero touches is valid and must count), then one outcome to close it — 2PM, 2PA, 3PM, 3PA, FT, TO. Made shots can attach an and-1 free throw to the same possession. PPP is the headline stat.
 
 ## Verifying changes
 
-**Run `python3 tests/run_all.py` before shipping anything** — thirteen suites, ~280 assertions, about two minutes. See `tests/README.md` for what each covers and how to add more.
+**Run `python3 tests/run_all.py` before shipping anything** — fourteen suites, ~305 assertions, about two and a half minutes. See `tests/README.md` for what each covers and how to add more.
 
 There is no test framework and no Node here, so these drive a real browser (Playwright via `pip3`, not Homebrew) against a real local server. They cover the things unit tests would miss: database upgrades that must not eat existing games, stats that must not blend both teams' points, and offline behaviour tested by actually severing the network. Re-verify against the live URL after deploying.
 

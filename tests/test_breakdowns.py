@@ -147,7 +147,7 @@ with sync_playwright() as pw:
     page.goto(f"http://localhost:{PORT}/index.html", wait_until="networkidle")
     page.wait_for_timeout(800)
     page.click('.tab-bar button[data-view="roster"]')
-    page.click('.list-toolbar button'); page.fill('.entity-form [name="number"]', "5")
+    page.click('.list-toolbar button:has-text("+ Add")'); page.fill('.entity-form [name="number"]', "5")
     page.fill('.entity-form [name="name"]', "Luka")
     page.click('.entity-form button[type="submit"]'); page.wait_for_timeout(300)
 

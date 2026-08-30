@@ -243,6 +243,12 @@ select {
   transform: scale(0.97);
 }
 
+/* The ▲ at the top of a Reorder list, and the ▼ at the bottom: still
+   there, so the row doesn't change width as things move, but visibly dead. */
+.btn[disabled] {
+  opacity: 0.3;
+}
+
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);

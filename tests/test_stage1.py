@@ -128,7 +128,7 @@ with sync_playwright() as pw:
     # Add a coverage of his own, confirm it lands at the end
     page.click('.segmented__btn:has-text("Coverages")')
     page.wait_for_timeout(300)
-    page.click('.list-toolbar button')
+    page.click('.list-toolbar button:has-text("+ Add")')
     page.fill('.entity-form [name="name"]', "Veer Back")
     page.click('.entity-form button[type="submit"]')
     page.wait_for_timeout(500)

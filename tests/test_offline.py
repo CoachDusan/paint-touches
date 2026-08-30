@@ -44,7 +44,7 @@ with sync_playwright() as pw:
     # Add a player, start a game, log an offensive AND a defensive possession
     # entirely without a connection.
     page.click('.tab-bar button[data-view="roster"]')
-    page.click('.list-toolbar button'); page.fill('.entity-form [name="number"]', "9")
+    page.click('.list-toolbar button:has-text("+ Add")'); page.fill('.entity-form [name="number"]', "9")
     page.fill('.entity-form [name="name"]', "Offline Guy")
     page.click('.entity-form button[type="submit"]'); page.wait_for_timeout(400)
     check("roster works offline", "Offline Guy" in page.text_content(".entity-list"), True)
