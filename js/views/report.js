@@ -147,9 +147,8 @@ export async function render(root, { onBack } = {}) {
   const entries = await Promise.all(
     games.map(async (game) => ({ game, possessions: await Possessions.listByGame(game.id) }))
   );
-  // Oldest first, so "the gap held in 5 of 7 games" walks the season forward.
-  entries.sort((a, b) => (a.game.date || "").localeCompare(b.game.date || ""));
-
+  // buildReport() puts the games in order itself, date then finishing time, so
+  // nothing here depends on what order the database handed them back in.
   const r = buildReport(entries);
   const first = entries[0].game.date;
   const last = entries[entries.length - 1].game.date;
@@ -217,7 +216,7 @@ export async function render(root, { onBack } = {}) {
       heading("Offense — paint touches",
         `${plural(r.off.overall.possessions, "possession")} · ${plural(r.off.overall.points, "point")} · ` +
         `${plural(r.off.overall.fouls, "non-shooting foul")} drawn (not in PPP)`),
-      tableCard("Game log", r.offense.gameLog),
+      listCard("Game log", r.offense.gameLog, "No offensive possessions logged."),
       el("div", { class: "card" }, [
         el("div", { class: "section-label" }, "With a paint touch vs without"),
         el("div", { class: "report-panels" }, [
@@ -229,17 +228,22 @@ export async function render(root, { onBack } = {}) {
           ]),
         ]),
       ]),
-      tableCard("By play", r.offense.plays),
-      tableCard("By quarter", r.offense.quarters),
-      tableCard("Who gets us to the paint", r.offense.players),
+      listCard("By play", r.offense.plays, "No offensive possessions logged."),
+      listCard("By quarter", r.offense.quarters, "No offensive possessions logged."),
+      listCard("Who gets us to the paint", r.offense.players,
+        "No paint touches logged yet — tap a player before the outcome to record one."),
 
       heading("Defense — pick-and-roll",
         `${plural(r.def.overall.trips, "pick-and-roll trip")} · ${plural(r.def.overall.points, "point")} allowed · ` +
         `${plural(r.def.overall.mistakes, "breakdown")} · only pick-and-roll possessions are tracked`),
-      tableCard("Game log", r.defense.gameLog),
-      tableCard("Coverages and their breakdowns", r.defense.coverages),
-      tableCard("Breakdowns by player", r.defense.players),
-      tableCard("By quarter", r.defense.quarters),
+      // Every defensive table sits on the same "no pick-and-roll tracked yet"
+      // footing, so a season with none says so four times rather than printing
+      // four sets of bare headers.
+      listCard("Game log", r.defense.gameLog, "No pick-and-roll possessions tracked."),
+      listCard("Coverages and their breakdowns", r.defense.coverages, "No pick-and-roll possessions tracked."),
+      listCard("Breakdowns by player", r.defense.players,
+        "No breakdowns tagged to a player."),
+      listCard("By quarter", r.defense.quarters, "No pick-and-roll possessions tracked."),
 
       ...lastGameSection(r),
     ])

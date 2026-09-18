@@ -36,7 +36,14 @@ function totals(entries) {
   return { off: computeStats(all), def: computeDefenseStats(all) };
 }
 
-export function buildReport(entries) {
+export function buildReport(unordered) {
+  // Oldest first, and for two games on the same date — a tournament day — the
+  // one that finished later is the later game. Sorting on the date alone left
+  // "last game" pointing at whichever the database happened to return first.
+  const entries = [...unordered].sort((a, b) =>
+    (a.game.date || "").localeCompare(b.game.date || "") ||
+    (a.game.completedAt || a.game.createdAt || 0) - (b.game.completedAt || b.game.createdAt || 0)
+  );
   const games = entries.map((e) => e.game);
   const G = games.length;
   const { off, def } = totals(entries);

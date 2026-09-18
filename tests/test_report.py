@@ -154,6 +154,29 @@ MOVED = """
 })
 """
 
+# Two games on the same date — a tournament day — handed over newest first,
+# the way the database returns them. "Last game" has to be the one that
+# finished later, not whichever arrived first. This was a real bug: the live
+# report named the earlier game.
+ORDER = """
+() => import('/js/report.js').then((m) => {
+  const mk = (id, opponent, completedAt) => ({
+    id, date: "2026-09-20", opponent, ourScore: 70, theirScore: 60,
+    status: "completed", currentQuarter: "4", createdAt: completedAt - 1000, completedAt,
+  });
+  const poss = (gameId) => [{
+    id: gameId + "1", gameId, quarter: "1", sequenceNumber: 1, side: "offense",
+    outcome: "2PM", points: 2, touches: [], andOne: null, ftAttempt: null,
+    play: { playId: null, playName: "Fastbreak / No Play" },
+  }];
+  const r = m.buildReport([
+    { game: mk("late", "Second game", 5000), possessions: poss("late") },
+    { game: mk("early", "First game", 1000), possessions: poss("early") },
+  ]);
+  return { last: r.lastGame.game.opponent, order: r.perGame.map((g) => g.game.opponent) };
+})
+"""
+
 # Same shape, but one game only and barely any of it: nothing here is big
 # enough to claim anything, and the report has to stay quiet about it.
 THIN = """
@@ -270,6 +293,11 @@ with sync_playwright() as pw:
           moved["breakdown"][0][2:], ["1:30", "Weak", "Strong hand", "#21 Vanin", "3PT Made · 3"])
     check("a game with no turnovers lists none", moved["touchFlag"], 0)
 
+    order = page.evaluate(ORDER)
+    check("two games on one date are ordered by which finished later",
+          order["order"], ["First game", "Second game"])
+    check("and the last game is the later one", order["last"], "Second game")
+
     thin = page.evaluate(THIN)
     check("nothing is claimed from four possessions", thin["findings"], [])
     check("no priorities either", thin["priorities"], 0)
@@ -308,6 +336,8 @@ with sync_playwright() as pw:
           "Nothing to compare it with yet" in screen, True)
     check("a clean game says so instead of printing an empty table",
           "No pick-and-roll breakdowns logged in this game." in screen, True)
+    check("and so does a season with no pick-and-roll tracked at all",
+          "No pick-and-roll possessions tracked." in screen, True)
     check("a one-game report states the paint-touch gap or stays quiet",
           screen.count("Reaching the paint is worth") <= 1, True)
     page.screenshot(path=OUT + "coach-report.png", full_page=True)
