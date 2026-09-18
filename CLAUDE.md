@@ -72,6 +72,17 @@ whatever string is stored beside it. Stats, exports and the live picker all go
 through it, so games logged under the old name display under the new one with
 no migration.
 
+**Renaming a list entry mid-season.** Totals are keyed by id, so a rename
+never splits one — "Reject" renamed to "Strong hand" stays a single row
+counting every tap under both names. The *label* follows the newest tap
+(`label()` and `stampOf()` in `stats.js`), because that is what the coach calls
+it now; without that, a season row wore whichever name happened to be tapped
+first, which after a rename is always the obsolete one. A single game's own
+screen is unaffected, since every record in it carries that game's name — so
+the season report reads "Strong hand" while the September game it was tapped
+in still reads "Reject", and both are correct. Player names follow the same
+rule, which is what fixes a mid-season spelling correction.
+
 **Outcome colours are by event, not by good news.** Green always means the
 ball went in, on either side of the ball — so on defense the green button is
 the one you *didn't* want. That is deliberate: the tap keeps the same place

@@ -154,6 +154,45 @@ MOVED = """
 })
 """
 
+# A list renamed mid-season: "Reject" became "Strong hand", a coverage and a
+# play were renamed too, and a player's name was corrected. Every record keeps
+# the name it was tapped under, so the season has two names for one entry.
+# Totals must not split, the label must be the newest name — and one game on
+# its own must still show what it was called then.
+RENAMED = """
+() => import('/js/report.js').then((m) => {
+  const game = (id, date, at) => ({ id, date, opponent: id, ourScore: 70, theirScore: 60,
+    status: "completed", currentQuarter: "4", createdAt: at, completedAt: at });
+  const pair = (gameId, at, mistakeName, coverageName, playName, playerName) => ([
+    { id: gameId + "d", gameId, quarter: "1", sequenceNumber: 1, side: "defense", closedAt: at,
+      outcome: "2PM", points: 2, touches: [],
+      coverage: { coverageId: "c1", coverageName },
+      mistake: { mistakeId: "m1", mistakeName },
+      mistakePlayer: { playerId: "p1", playerName, playerNumber: "24" } },
+    { id: gameId + "o", gameId, quarter: "1", sequenceNumber: 2, side: "offense", closedAt: at,
+      outcome: "2PM", points: 2, andOne: null, ftAttempt: null,
+      play: { playId: "pl1", playName },
+      touches: [{ playerId: "p1", playerName, playerNumber: "24", timestamp: at }] },
+  ]);
+
+  const older = { game: game("old", "2026-09-01", 1000),
+                  possessions: pair("old", 1000, "Reject", "Weak", "5 Twist", "Callison") };
+  const newer = { game: game("new", "2026-09-20", 5000),
+                  possessions: pair("new", 5000, "Strong hand", "Weak side", "Horns", "Charles Callison") };
+
+  const season = m.buildReport([older, newer]);
+  const justTheOldGame = m.buildReport([older]);
+  return {
+    mistakes: season.def.byMistake.map((x) => [x.name, x.count]),
+    coverages: season.def.byCoverage.map((x) => [x.name, x.trips]),
+    plays: season.off.byPlay.map((x) => [x.name, x.possessions]),
+    defPlayer: season.def.byPlayer.map((p) => [p.name, p.breakdowns.map((b) => b.name)]),
+    offPlayer: season.off.byPlayer.map((p) => p.name),
+    oldGameAlone: justTheOldGame.def.byMistake.map((x) => [x.name, x.count]),
+  };
+})
+"""
+
 # Two games on the same date — a tournament day — handed over newest first,
 # the way the database returns them. "Last game" has to be the one that
 # finished later, not whichever arrived first. This was a real bug: the live
@@ -292,6 +331,19 @@ with sync_playwright() as pw:
     check("the clip time is read from the timestamps, not invented",
           moved["breakdown"][0][2:], ["1:30", "Weak", "Strong hand", "#21 Vanin", "3PT Made · 3"])
     check("a game with no turnovers lists none", moved["touchFlag"], 0)
+
+    # --- renaming a list mid-season ----------------------------------------
+    renamed = page.evaluate(RENAMED)
+    check("a renamed breakdown stays one row, under the new name",
+          renamed["mistakes"], [["Strong hand", 2]])
+    check("so does a renamed coverage", renamed["coverages"], [["Weak side", 2]])
+    check("and a renamed play", renamed["plays"], [["Horns", 2]])
+    check("a player's breakdown list follows the rename too",
+          renamed["defPlayer"], [["Charles Callison", ["Strong hand"]]])
+    check("a corrected player name shows the corrected one",
+          renamed["offPlayer"], ["Charles Callison"])
+    check("but that game on its own still says what was tapped then",
+          renamed["oldGameAlone"], [["Reject", 1]])
 
     order = page.evaluate(ORDER)
     check("two games on one date are ordered by which finished later",

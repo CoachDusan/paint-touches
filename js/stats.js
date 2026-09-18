@@ -39,6 +39,24 @@ function add(bucket, possession) {
   if (possession.touches && possession.touches.length > 0) bucket.touchPossessions += 1;
 }
 
+// Names are stored on the record as they were tapped, which is what keeps a
+// past game readable after the coach renames something (rule 4). Totals are
+// keyed by id, so a rename never splits one. But a row still has to be
+// labelled, and the newest tap wins — "Reject" renamed to "Strong hand" is one
+// row called Strong hand, counting every tap under both names. A single game's
+// own screen is unaffected: every record in it carries that game's name.
+function stampOf(possession) {
+  return possession.closedAt || possession.startedAt || 0;
+}
+
+function label(bucket, fields, at) {
+  if (at >= (bucket.nameAt ?? -1)) {
+    Object.assign(bucket, fields);
+    bucket.nameAt = at;
+  }
+  return bucket;
+}
+
 function ppp(bucket) {
   return bucket.possessions ? bucket.points / bucket.possessions : null;
 }
@@ -75,7 +93,7 @@ export function computeStats(allPossessions) {
     if (!byPlay.has(playKey)) {
       byPlay.set(playKey, { name: playNameOf(p), ...emptyBucket() });
     }
-    add(byPlay.get(playKey), p);
+    add(label(byPlay.get(playKey), { name: playNameOf(p) }, stampOf(p)), p);
 
     // Every player who touched this possession shares "credit" for it —
     // counted once each, even if a player touched the ball twice in the
@@ -93,7 +111,8 @@ export function computeStats(allPossessions) {
           turnovers: 0,
         });
       }
-      const playerBucket = byPlayer.get(t.playerId);
+      const playerBucket = label(byPlayer.get(t.playerId),
+        { name: t.playerName, number: t.playerNumber }, stampOf(p));
       // The touch is real either way — he touched the paint, foul or not —
       // so it counts. What he can't be given is a share of a possession
       // that never ended, which would put a 0 in his PPP for nothing.
@@ -204,7 +223,8 @@ export function computeDefenseStats(allPossessions) {
         breakdowns: new Map(),
       });
     }
-    const coverageBucket = byCoverage.get(coverageKey);
+    const coverageBucket = label(byCoverage.get(coverageKey),
+      { name: p.coverage?.coverageName || "Unrecorded" }, stampOf(p));
     add(coverageBucket, p);
     if (isClean(p)) coverageBucket.cleanTrips += 1;
     if (p.outcome === "TO") coverageBucket.forcedTurnovers += 1;
@@ -217,13 +237,14 @@ export function computeDefenseStats(allPossessions) {
     if (!coverageBucket.breakdowns.has(p.mistake.mistakeId)) {
       coverageBucket.breakdowns.set(p.mistake.mistakeId, { name: p.mistake.mistakeName, ...emptyBucket() });
     }
-    add(coverageBucket.breakdowns.get(p.mistake.mistakeId), p);
+    add(label(coverageBucket.breakdowns.get(p.mistake.mistakeId),
+              { name: p.mistake.mistakeName }, stampOf(p)), p);
 
     const mistakeKey = p.mistake.mistakeId;
     if (!byMistake.has(mistakeKey)) {
       byMistake.set(mistakeKey, { name: p.mistake.mistakeName, ...emptyBucket() });
     }
-    add(byMistake.get(mistakeKey), p);
+    add(label(byMistake.get(mistakeKey), { name: p.mistake.mistakeName }, stampOf(p)), p);
 
     // A breakdown nobody was tagged for still counts as a breakdown — it
     // just can't be attributed. Surfaced so a pile of them is visible
@@ -243,13 +264,15 @@ export function computeDefenseStats(allPossessions) {
         clips: [],
       });
     }
-    const playerBucket = byPlayer.get(playerKey);
+    const playerBucket = label(byPlayer.get(playerKey),
+      { name: p.mistakePlayer.playerName, number: p.mistakePlayer.playerNumber }, stampOf(p));
     add(playerBucket, p);
 
     if (!playerBucket.breakdowns.has(p.mistake.mistakeId)) {
       playerBucket.breakdowns.set(p.mistake.mistakeId, { name: p.mistake.mistakeName, count: 0 });
     }
-    playerBucket.breakdowns.get(p.mistake.mistakeId).count += 1;
+    label(playerBucket.breakdowns.get(p.mistake.mistakeId),
+          { name: p.mistake.mistakeName }, stampOf(p)).count += 1;
 
     // Enough to find the moment on video: which quarter, when it was tapped,
     // and what to look for. Timestamps have been recorded since the first
@@ -368,13 +391,16 @@ export function computeTagStats(events) {
 
   for (const e of events) {
     if (!byTag.has(e.tagId)) byTag.set(e.tagId, { name: e.tagName, total: 0, players: new Map() });
-    const tag = byTag.get(e.tagId);
+    // Same rule as possessions: a renamed tag or a renamed player keeps one
+    // row, labelled with whatever it was called most recently.
+    const tag = label(byTag.get(e.tagId), { name: e.tagName }, e.loggedAt || 0);
     tag.total += 1;
 
     if (!tag.players.has(e.playerId)) {
       tag.players.set(e.playerId, { name: e.playerName, number: e.playerNumber, count: 0 });
     }
-    tag.players.get(e.playerId).count += 1;
+    label(tag.players.get(e.playerId),
+          { name: e.playerName, number: e.playerNumber }, e.loggedAt || 0).count += 1;
   }
 
   return [...byTag.entries()]
@@ -382,7 +408,9 @@ export function computeTagStats(events) {
       id,
       name: t.name,
       total: t.total,
-      players: [...t.players.values()].sort((a, b) => b.count - a.count),
+      players: [...t.players.values()]
+        .map((p) => ({ name: p.name, number: p.number, count: p.count }))
+        .sort((a, b) => b.count - a.count),
     }))
     .sort((a, b) => b.total - a.total);
 }
