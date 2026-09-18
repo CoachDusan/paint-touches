@@ -11,8 +11,12 @@ import { QUARTERS, SIDES, sideOf, endsPossession, playNameOf, NO_MISTAKE } from 
 // see endsPossession() for why. Anything counting *how often something
 // happened* (breakdowns, coverage calls) reads `trips`; anything dividing
 // points reads `possessions`.
+// m2/a2, m3/a3 and ft are the shot mix: made and attempted twos, threes, and
+// trips that ended at the line. Counted here, once, so anything that wants to
+// say "36% on 50 threes" reads it off the same bucket as PPP instead of
+// walking the possessions again and risking a different answer.
 function emptyBucket() {
-  return { points: 0, possessions: 0, trips: 0, turnovers: 0, fouls: 0 };
+  return { points: 0, possessions: 0, trips: 0, turnovers: 0, fouls: 0, m2: 0, a2: 0, m3: 0, a3: 0, ft: 0 };
 }
 
 function add(bucket, possession) {
@@ -24,6 +28,11 @@ function add(bucket, possession) {
   bucket.points += possession.points;
   bucket.possessions += 1;
   if (possession.outcome === "TO") bucket.turnovers += 1;
+  if (possession.outcome === "2PM") bucket.m2 += 1;
+  if (possession.outcome === "2PM" || possession.outcome === "2PA") bucket.a2 += 1;
+  if (possession.outcome === "3PM") bucket.m3 += 1;
+  if (possession.outcome === "3PM" || possession.outcome === "3PA") bucket.a3 += 1;
+  if (possession.outcome === "FT") bucket.ft += 1;
 }
 
 function ppp(bucket) {
@@ -316,6 +325,9 @@ export function computeDefenseStats(allPossessions) {
         share: shareOfTrips(b.trips),
         points: b.points,
         ppp: ppp(b),
+        // What a breakdown gave up, not just how often it happened.
+        m3: b.m3,
+        a3: b.a3,
       }))
       .sort((a, b) => b.count - a.count),
     byPlayer: [...byPlayer.entries()]

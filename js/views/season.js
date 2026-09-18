@@ -14,6 +14,7 @@ import { statTile, table } from "./stats-panel.js";
 import { renderGameStats } from "./game-stats.js";
 import { renderExportActions } from "./export-actions.js";
 import { renderBackupCard } from "./backup-card.js";
+import * as report from "./report.js";
 import { buildSeasonSummaryText, buildCSV } from "../export.js";
 
 // Games still in progress are left out: a half-tracked game would drag the
@@ -198,6 +199,17 @@ export async function render(root) {
       el("div", { class: "screen" }, [
         el("h1", { class: "screen-title" }, "Season"),
         buildRecord(),
+        // The report lives behind Season rather than in the tab bar: it is
+        // made between games, never reached for on the bench.
+        el("div", { class: "card" }, [
+          el("div", { class: "section-label" }, "Coach report"),
+          el("div", { class: "stat-note" },
+            "The one-page report for the head coach: what the season says, and what to do about it. Print it or save it as a PDF."),
+          el("button", {
+            class: "btn btn-primary btn-block",
+            onclick: () => report.render(root, { onBack: () => render(root) }),
+          }, "Open the coach report"),
+        ]),
         buildTrend(),
         el("div", { class: "card" }, [
           el("div", { class: "section-label" }, "Season totals — every completed game"),

@@ -11,7 +11,7 @@
 // Bump this on every deploy that changes an app file. The fetch handler is
 // cache-first, so an unchanged version number means iPads keep serving the
 // old code forever, no matter what's on the server.
-const CACHE_VERSION = "v17";
+const CACHE_VERSION = "v18";
 const CACHE_NAME = `paint-touches-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -24,6 +24,7 @@ const PRECACHE_URLS = [
   "./js/models.js",
   "./js/possession.js",
   "./js/stats.js",
+  "./js/report.js",
   "./js/sort.js",
   "./js/utils.js",
   "./js/views/entity-list.js",
@@ -36,6 +37,7 @@ const PRECACHE_URLS = [
   "./js/views/defense-stats-panel.js",
   "./js/views/game-stats.js",
   "./js/views/season.js",
+  "./js/views/report.js",
   "./js/views/export-actions.js",
   "./js/views/backup-card.js",
   "./js/export.js",
