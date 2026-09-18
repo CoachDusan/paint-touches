@@ -3,7 +3,7 @@
 // frozen possession list) — same function, same math, so live and
 // historical numbers can never disagree with each other.
 
-import { QUARTERS, SIDES, sideOf, endsPossession, NO_MISTAKE } from "./possession.js";
+import { QUARTERS, SIDES, sideOf, endsPossession, playNameOf, NO_MISTAKE } from "./possession.js";
 
 // Two totals, not one. `trips` is everything that was tapped; `possessions`
 // is only what actually ended a trip down the floor, and it is the only
@@ -61,7 +61,7 @@ export function computeStats(allPossessions) {
     const playKey = p.play ? p.play.playId ?? "transition" : "transition";
     if (!byPlay.has(playKey)) {
       byPlay.set(playKey, {
-        name: p.play ? p.play.playName : "Transition / No Play",
+        name: playNameOf(p),
         ...emptyBucket(),
         touchPossessions: 0,
       });

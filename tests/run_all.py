@@ -24,6 +24,7 @@ ORDER = [
     "test_reorder.py",
     "test_breakdowns.py",
     "test_tags.py",
+    "test_postgame_tags.py",
     "test_stage5.py",
     "test_cleanup.py",
     "test_season.py",

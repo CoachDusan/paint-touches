@@ -41,6 +41,7 @@ PATH — on this machine that's `~/Library/Python/3.9/bin`.
 | `test_reorder.py` | Hand-arranged list order: that it starts from what you're looking at, **survives a reload**, is stored on the records so it travels in a backup, that a new entry lands at the bottom, and that the game screen follows it |
 | `test_breakdowns.py` | Mistakes grouped under their coverage; which mistake each player made; the video clip list; **the live picker narrowing to the chosen coverage** |
 | `test_tags.py` | **v2 → v3 upgrade**; quick tags; that tagging creates no possession; undo; no orphans after clearing history |
+| `test_postgame_tags.py` | Quick tags added to a **finished** game: the quarter is picked by hand, the record is marked as added later, it counts in the game's stats, it exports with no clock time, and it can be removed. Also that a possession with no play called reads as "Fastbreak / No Play" |
 | `test_stage5.py` | Score, derived win/loss, venue; ending with and without a score; editing afterwards |
 | `test_cleanup.py` | Deleting archived entries; clearing history; that a game **in progress survives** both |
 | `test_season.py` | Season pooling; that PPP is pooled not averaged; **in-progress games excluded**; trends |

@@ -3,7 +3,8 @@
 // list that will never change again.
 
 import { el, formatDate, formatPPP } from "../utils.js";
-import { Games, Possessions, TagEvents, VENUES, gameResult } from "../models.js";
+import { Games, Players, Possessions, QuickTags, TagEvents, VENUES, gameResult } from "../models.js";
+import { QUARTERS } from "../possession.js";
 import { computeStats } from "../stats.js";
 import { renderGameStats } from "./game-stats.js";
 import { renderExportActions } from "./export-actions.js";
@@ -34,6 +35,13 @@ export async function render(root) {
       return { game, possessions, tagEvents, stats };
     })
   );
+
+  // The same two lists the bench screen taps from, so a tag added after the
+  // game is the same record in every way but one — it knows it came later.
+  const [quickTags, players] = await Promise.all([QuickTags.list(), Players.list()]);
+  // Kept outside the render so picking a tag, then a quarter, then three
+  // players in a row doesn't reset the picker on every repaint.
+  const tagDraft = { tagId: null, quarter: null };
 
   const venueLabel = (key) => VENUES.find((v) => v.key === key)?.label || key;
 
@@ -144,6 +152,112 @@ export async function render(root) {
     await render(root);
   }
 
+  // An observation often arrives after the final buzzer — on the bus, or
+  // watching film. This writes the record the bench writes, with two
+  // differences: the quarter is picked by hand, because nothing here can infer
+  // it, and the record is marked as added later so its clock time is never
+  // read as the moment it happened.
+  function buildTagEditor(game, summary, repaint) {
+    if (quickTags.length === 0) return null;
+
+    const tag = quickTags.find((t) => t.id === tagDraft.tagId) || null;
+    const quarterLabel = (q) => (q === "OT" ? "OT" : `Q${q}`);
+
+    const tagChips = el("div", { class: "chip-grid" },
+      quickTags.map((t) =>
+        el("button", {
+          class: "chip" + (tagDraft.tagId === t.id ? " is-active" : ""),
+          onclick: () => {
+            tagDraft.tagId = tagDraft.tagId === t.id ? null : t.id;
+            repaint();
+          },
+        }, t.name)
+      )
+    );
+
+    const quarterChips = el("div", { class: "chip-grid" },
+      QUARTERS.map((q) =>
+        el("button", {
+          class: "chip" + (tagDraft.quarter === q ? " is-active" : ""),
+          onclick: () => {
+            tagDraft.quarter = tagDraft.quarter === q ? null : q;
+            repaint();
+          },
+        }, quarterLabel(q))
+      )
+    );
+
+    let target;
+    if (players.length === 0) {
+      target = el("div", { class: "stat-note" }, "Your roster is empty — add players first.");
+    } else if (!tag || !tagDraft.quarter) {
+      target = el("div", { class: "stat-note" }, "Pick a tag and a quarter, then tap the player it was.");
+    } else {
+      target = el("div", { class: "chip-grid" },
+        players.map((player) =>
+          el("button", {
+            class: "chip",
+            onclick: async () => {
+              await TagEvents.add({
+                gameId: game.id,
+                quarter: tagDraft.quarter,
+                tagId: tag.id,
+                tagName: tag.name,
+                playerId: player.id,
+                playerName: player.name,
+                playerNumber: player.number,
+                addedAfterGame: true,
+              });
+              summary.tagEvents = await TagEvents.listByGame(game.id);
+              repaint();
+            },
+          }, player.number ? `#${player.number} ${player.name}` : player.name)
+        )
+      );
+    }
+
+    const logged = summary.tagEvents.map((e) =>
+      el("li", { class: "list-row" }, [
+        el("span", { class: "list-row__main" }, [
+          el("strong", {}, e.tagName),
+          el("span", { class: "pill" }, e.quarter ? quarterLabel(e.quarter) : "no quarter"),
+          el("span", {}, e.playerNumber ? `#${e.playerNumber} ${e.playerName}` : e.playerName),
+          e.addedAfterGame ? el("span", { class: "pill" }, "added later") : null,
+        ]),
+        el("button", {
+          class: "btn btn-sm btn-danger",
+          onclick: () => removeTagEvent(game, e, summary, repaint),
+        }, "Remove"),
+      ])
+    );
+
+    return el("div", { class: "card" }, [
+      el("div", { class: "section-label" }, "Quick tags"),
+      el("div", { class: "stat-note" },
+        "Add something you noticed after the game. It counts exactly like a tag tapped from the bench."),
+      // Three rows of identical chips with nothing between them is a guessing
+      // game. Numbered labels say what each row is and what order to tap in.
+      el("div", { class: "stat-note" }, "1 · Which tag"),
+      tagChips,
+      el("div", { class: "stat-note" }, "2 · Which quarter"),
+      quarterChips,
+      el("div", { class: "stat-note" }, "3 · Which player"),
+      target,
+      logged.length
+        ? el("div", { class: "section-label" }, `Tagged in this game (${logged.length})`)
+        : null,
+      logged.length ? el("ul", { class: "entity-list" }, logged) : null,
+    ]);
+  }
+
+  async function removeTagEvent(game, event, summary, repaint) {
+    const who = event.playerNumber ? `#${event.playerNumber} ${event.playerName}` : event.playerName;
+    if (!confirm(`Remove "${event.tagName}" for ${who}?\n\nThis cannot be undone.`)) return;
+    await TagEvents.remove(event.id);
+    summary.tagEvents = await TagEvents.listByGame(game.id);
+    repaint();
+  }
+
   function showList() {
     document.getElementById("app-bar-context").textContent = "";
     root.replaceChildren(
@@ -214,6 +328,7 @@ export async function render(root) {
         ]),
         editing ? buildDetailsForm(game, () => showDetail(game, stats)) : header,
         renderGameStats(summary.possessions, summary.tagEvents, { gameStart: game.createdAt }),
+        buildTagEditor(game, summary, () => showDetail(game, stats)),
         renderExportActions({
           title: `${game.opponent ? "vs " + game.opponent : "Game"} — ${formatDate(game.date)}`,
           buildSummary: () => buildGameSummaryText(game, summary.possessions, summary.tagEvents),

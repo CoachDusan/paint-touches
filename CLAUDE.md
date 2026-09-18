@@ -39,7 +39,7 @@ Vanilla HTML/CSS/ES modules. **No build step, no npm, no framework, no bundler**
 - `js/stats.js` — `computeStats()` (offense) and `computeDefenseStats()` (defense). **Both filter by `side` first.** Defensive possessions carry points *allowed* in the same `points` field, so any stat function that forgets the filter silently blends both teams' scoring
 - `js/views/stats-panel.js` / `defense-stats-panel.js` / `game-stats.js` — shared renderers behind one Offense/Defense switch, so live and History markup can't drift
 - `js/views/live-tracking.js` — the sideline screen: touches → outcome, with and-1 and FT sub-flows
-- **Possessions vs. tag events.** A possession is a trip down the floor that ends in an outcome. A *quick tag* (e.g. "Lazy box-out") is an observation with no outcome and no PPP — its own `tagEvents` store, one record per player per occurrence. Don't force observations into the possession shape; anything deleting a game must delete both, which is why every deletion path — one game or all of history — goes through `purgeGames()` in `models.js` and its single all-or-nothing transaction
+- **Possessions vs. tag events.** A possession is a trip down the floor that ends in an outcome. A *quick tag* (e.g. "Lazy box-out") is an observation with no outcome and no PPP — its own `tagEvents` store, one record per player per occurrence. A tag can also be added to a *finished* game, from that game's screen in History — an observation often arrives on the bus or on film. It writes the same record with two differences: the quarter is picked by hand, because nothing can infer it, and `addedAfterGame: true` marks it so `buildCSV()` leaves its clock columns blank instead of exporting the moment it was typed as if that were when it happened. Don't force observations into the possession shape; anything deleting a game must delete both, which is why every deletion path — one game or all of history — goes through `purgeGames()` in `models.js` and its single all-or-nothing transaction
 - `js/sort.js` — two different sorts that deliberately behave in opposite ways. The **list sort** (roster, plays, coverages) is a setting: it decides the order of the tap targets and is frozen until changed, per rule 7. The **table sort** (tap a stats column header) is the opposite — it *must* survive new data, because the live panel is rebuilt after every possession and a column you sorted by has to come back sorted with the new numbers in it. Both live in `localStorage`, not IndexedDB: they're per-iPad display settings and have no business travelling inside a backup file
 - `js/export.js` — pure string builders (summary / CSV / backup JSON) with no delivery logic, so they can be read and tested directly
 - `js/share.js` — the delivery side. Standalone mode has no Safari toolbar, so share and print must be triggered from in-app buttons; each route steps down share sheet → clipboard → on-screen text
@@ -58,6 +58,18 @@ archived ones) applies everywhere and can't sit inside a group, so it sinks
 to the bottom — the same rule as a player with no jersey number. Because
 this is the list sort, it also reorders the in-game breakdown buttons: with
 it on, the ones assigned to the coverage you called come first.
+
+**The no-play name is read, never trusted from the record.** A possession
+stores the play name as it was tapped, which is what stops a renamed play from
+rewriting the games it was run in (rule 4). The transition option is the
+exception: it is built into the app rather than being a playbook entry, so
+renaming it must change every game ever logged. `TRANSITION_PLAY_NAME` in
+`possession.js` is that single name — "Fastbreak / No Play" since Sep 2026,
+"Transition / No Play" before — and `playNameOf()` is the only thing that
+decides what a possession's play is called: playId `null` means transition,
+whatever string is stored beside it. Stats, exports and the live picker all go
+through it, so games logged under the old name display under the new one with
+no migration.
 
 **Outcome colours are by event, not by good news.** Green always means the
 ball went in, on either side of the ball — so on defense the green button is

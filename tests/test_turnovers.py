@@ -84,7 +84,7 @@ results.append(check("Q3 TO rate is 0 not null", q["3"]["toRate"], 0))
 pl = {x["name"]: x for x in stats["byPlay"]}
 results.append(check("Horns turnovers", pl["Horns"]["turnovers"], 1))
 results.append(check("Flex turnovers", pl["Flex"]["turnovers"], 1))
-results.append(check("Transition turnovers", pl["Transition / No Play"]["turnovers"], 1))
+results.append(check("Fastbreak turnovers", pl["Fastbreak / No Play"]["turnovers"], 1))
 results.append(check("Horns TO rate (1 of 4)", round(pl["Horns"]["toRate"], 4), round(1/4, 4)))
 
 py = {x["name"]: x for x in stats["byPlayer"]}

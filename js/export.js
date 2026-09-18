@@ -6,6 +6,7 @@
 import { formatDate, formatPPP, formatClock, formatElapsed } from "./utils.js";
 import { computeStats, computeDefenseStats, computeTagStats } from "./stats.js";
 import { gameResult, VENUES } from "./models.js";
+import { SIDES, sideOf, playNameOf } from "./possession.js";
 
 const venueLabel = (key) => VENUES.find((v) => v.key === key)?.label || "";
 
@@ -180,7 +181,9 @@ export function buildCSV(entries) {
         quarter: p.quarter,
         sequence: p.sequenceNumber,
         side: p.side === "defense" ? "defense" : "offense",
-        play: p.play?.playName || "",
+        // Read through playNameOf so a transition trip exports under today's
+        // name, not the one stored when it was tapped. Defence has no play.
+        play: sideOf(p) === SIDES.OFFENSE ? playNameOf(p) : "",
         coverage: p.coverage?.coverageName || "",
         mistake: p.mistake?.mistakeName || "",
         mistake_player: p.mistakePlayer ? `#${p.mistakePlayer.playerNumber || "--"} ${p.mistakePlayer.playerName}` : "",
@@ -199,8 +202,11 @@ export function buildCSV(entries) {
         quarter: e.quarter,
         tag: e.tagName,
         tag_player: `#${e.playerNumber || "--"} ${e.playerName}`,
-        clock_time: e.loggedAt ? formatClock(e.loggedAt) : "",
-        minutes_into_game: formatElapsed(e.loggedAt, game.createdAt) || "",
+        // A tag added after the game carries the clock time of the moment it
+        // was typed — days later, maybe — which is not when it happened. The
+        // quarter is the only timing it honestly has, so the rest stays blank.
+        clock_time: e.addedAfterGame || !e.loggedAt ? "" : formatClock(e.loggedAt),
+        minutes_into_game: e.addedAfterGame ? "" : formatElapsed(e.loggedAt, game.createdAt) || "",
       }));
     }
   }

@@ -135,7 +135,7 @@ with sync_playwright() as pw:
     page.click('button:has-text("Start Game")'); page.wait_for_timeout(800)
     check("play buttons follow the arrangement",
           page.evaluate("[...document.querySelectorAll('.chip-grid .chip')].map(c=>c.textContent)"),
-          ["Transition / No Play"] + arranged + ["Brand New"])
+          ["Fastbreak / No Play"] + arranged + ["Brand New"])
     check("player buttons follow it too",
           page.evaluate("[...document.querySelectorAll('.player-tile .player-tile__name')].map(e=>e.textContent)"),
           ["Nikola","Marko"])

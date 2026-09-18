@@ -84,6 +84,22 @@ export function sideOf(possession) {
   return possession.side === SIDES.DEFENSE ? SIDES.DEFENSE : SIDES.OFFENSE;
 }
 
+// What a possession with no play called is called. It lives here rather than
+// on the record on purpose: unlike a playbook entry, this one is built into
+// the app, so renaming it has to change every game ever logged. Possessions
+// store the play name as it was tapped — games logged before this rename still
+// carry "Transition / No Play" inside them — so nothing reads that stored name
+// for a transition trip; playNameOf() below is the single place that decides.
+export const TRANSITION_PLAY_NAME = "Fastbreak / No Play";
+
+// A transition trip is the one whose playId is null, whatever name was stored
+// alongside it. Every other play keeps its own snapshot, which is what stops a
+// renamed play from rewriting the games it was run in.
+export function playNameOf(possession) {
+  const play = possession.play;
+  return play && play.playId != null ? play.playName : TRANSITION_PLAY_NAME;
+}
+
 // Marks a possession where the coverage was executed cleanly. Stored as a
 // real value rather than null so "we ran it right" is a countable result,
 // not an absence — without it there's no denominator to judge a coverage by.

@@ -4,6 +4,7 @@
 import { getDB } from "./db.js";
 import { uid } from "./utils.js";
 import { sortEntities, listSortNeeds } from "./sort.js";
+import { TRANSITION_PLAY_NAME } from "./possession.js";
 
 // ---------------------------------------------------------------------
 // Players and Plays are the same *shape*: a simple named record you can
@@ -175,7 +176,7 @@ export async function seedDefensiveDefaults() {
 // Always-available option in the live tracking play picker. Deliberately
 // NOT a stored record — it can never be edited or archived away by
 // accident, and the playbook screen never shows it as something to manage.
-export const TRANSITION_PLAY = { id: null, name: "Transition / No Play" };
+export const TRANSITION_PLAY = { id: null, name: TRANSITION_PLAY_NAME };
 
 // ---------------------------------------------------------------------
 // Games

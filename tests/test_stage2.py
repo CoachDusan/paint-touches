@@ -120,7 +120,7 @@ with sync_playwright() as pw:
     })""")
     check("three possessions stored", len(recs), 3)
     check("sides recorded", [r["side"] for r in recs], ["offense","defense","defense"])
-    check("offensive record still has its play", recs[0]["play"]["playName"], "Transition / No Play")
+    check("offensive record still has its play", recs[0]["play"]["playName"], "Fastbreak / No Play")
     check("defensive record has coverage", recs[1]["coverage"]["coverageName"], "Drop")
     check("defensive record has mistake", recs[1]["mistake"]["mistakeName"], "Big not at level of screen")
     check("defensive record has the player", recs[1]["mistakePlayer"]["playerName"], "Luka")
