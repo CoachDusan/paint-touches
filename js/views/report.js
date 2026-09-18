@@ -28,6 +28,52 @@ function panel(title, rows, tone) {
   ]);
 }
 
+// The detail tables. report.js decides what each cell says and whether it has
+// earned green, red or grey; this only draws it.
+function table(model) {
+  const numeric = new Set(model.numeric || []);
+  const draw = (c) => (typeof c === "string" ? { text: c } : c);
+
+  return el("div", { class: "stat-table-wrap" }, [
+    el("table", { class: "stat-table report-table" }, [
+      el("thead", {}, [
+        el("tr", {}, model.headers.map((h, i) =>
+          el("th", { class: numeric.has(i) ? "num" : "" }, h)
+        )),
+      ]),
+      el("tbody", {}, model.rows.map((r) =>
+        el("tr", {
+          class: [r.thin ? "is-thin" : "", r.total ? "is-total" : "", r.group ? "is-group" : ""]
+            .filter(Boolean).join(" "),
+        }, r.cells.map((c, i) => {
+          const cell = draw(c);
+          return el("td", {
+            class: [numeric.has(i) ? "num" : "", cell.tone ? "tone-" + cell.tone : ""]
+              .filter(Boolean).join(" "),
+          }, cell.text);
+        }))
+      )),
+    ]),
+  ]);
+}
+
+function tableCard(title, model) {
+  return el("div", { class: "card" }, [
+    el("div", { class: "section-label" }, title),
+    table(model),
+    model.note ? el("div", { class: "stat-note" }, model.note) : null,
+  ]);
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+function heading(text, sub) {
+  return el("div", { class: "card report-section-head" }, [
+    el("div", { class: "report-title" }, text),
+    el("div", { class: "stat-note" }, sub),
+  ]);
+}
+
 function bullets(items, tag) {
   return el(tag, { class: "report-list" },
     items.map((item) => el("li", {}, [el("strong", {}, item.lead + " "), item.text]))
@@ -124,6 +170,35 @@ export async function render(root, { onBack } = {}) {
         el("div", { class: "section-label" }, "How to read these numbers"),
         el("div", { class: "stat-note" }, r.caveats),
       ]),
+
+      // The detail behind the first page: where a coach goes after asking
+      // "against whom?" or "which set?".
+      heading("Offense — paint touches",
+        `${plural(r.off.overall.possessions, "possession")} · ${plural(r.off.overall.points, "point")} · ` +
+        `${plural(r.off.overall.fouls, "non-shooting foul")} drawn (not in PPP)`),
+      tableCard("Game log", r.offense.gameLog),
+      el("div", { class: "card" }, [
+        el("div", { class: "section-label" }, "With a paint touch vs without"),
+        el("div", { class: "report-panels" }, [
+          panel(r.offense.split.withTouch.title, r.offense.split.withTouch.rows, "win"),
+          panel(r.offense.split.without.title, r.offense.split.without.rows, "loss"),
+          el("div", { class: "report-panel" }, [
+            el("div", { class: "section-label" }, "The read"),
+            el("p", { class: "report-read" }, r.offense.split.read),
+          ]),
+        ]),
+      ]),
+      tableCard("By play", r.offense.plays),
+      tableCard("By quarter", r.offense.quarters),
+      tableCard("Who gets us to the paint", r.offense.players),
+
+      heading("Defense — pick-and-roll",
+        `${plural(r.def.overall.trips, "pick-and-roll trip")} · ${plural(r.def.overall.points, "point")} allowed · ` +
+        `${plural(r.def.overall.mistakes, "breakdown")} · only pick-and-roll possessions are tracked`),
+      tableCard("Game log", r.defense.gameLog),
+      tableCard("Coverages and their breakdowns", r.defense.coverages),
+      tableCard("Breakdowns by player", r.defense.players),
+      tableCard("By quarter", r.defense.quarters),
     ])
   );
 }

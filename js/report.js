@@ -12,6 +12,7 @@
 
 import { computeStats, computeDefenseStats } from "./stats.js";
 import { gameResult } from "./models.js";
+import { formatDate } from "./utils.js";
 
 // Under this many possessions, one made three moves PPP by 0.15 — so nothing
 // is allowed to claim anything on less.
@@ -64,6 +65,8 @@ export function buildReport(entries) {
     findings: findings(ctx),
     priorities: priorities(ctx),
     caveats: caveats(ctx),
+    offense: offenseDetail(ctx),
+    defense: defenseDetail(ctx),
   };
 }
 
@@ -341,4 +344,232 @@ function caveats({ off, def, games }) {
     `Anything resting on fewer than ${MIN_SAMPLE} possessions is left out rather than claimed.`,
   ];
   return parts.join(" ");
+}
+
+// ---------------------------------------------------------------------
+// The detail behind the findings: the tables a coach reaches for when a line
+// on the first page makes them ask "against whom?" or "which set?".
+//
+// Built as plain rows — a cell is a string, or { text, tone } when a number
+// has earned green or red — so the view stays a renderer and every judgement
+// (what counts as thin, what counts as clear of average) lives here, where it
+// can be tested.
+// ---------------------------------------------------------------------
+
+const FOLD = 10; // plays run fewer times than this are folded into one row
+
+const cell = (text, tone) => (tone ? { text, tone } : text);
+
+// Colour only where the sample can carry it: MIN_SAMPLE possessions, and at
+// least 0.15 clear of the team's own average — the swing one made three
+// creates over 20 possessions. Everything else stays plain.
+function pppCell(b, baseline, { lowerIsBetter = false } = {}) {
+  if (b.ppp === null || b.ppp === undefined) return "—";
+  const text = f2(b.ppp);
+  if (b.possessions < MIN_SAMPLE || baseline === null || baseline === undefined) return text;
+  const diff = lowerIsBetter ? baseline - b.ppp : b.ppp - baseline;
+  if (diff >= 0.15) return cell(text, "good");
+  if (diff <= -0.15) return cell(text, "bad");
+  return text;
+}
+
+const thinRow = (cells, poss) => ({ cells, thin: poss < MIN_SAMPLE });
+
+function gameCell(game) {
+  return `${game.opponent || "Game"} · ${formatDate(game.date)}`;
+}
+
+function resultCell(game) {
+  const result = gameResult(game);
+  if (!result || game.ourScore == null || game.theirScore == null) return "—";
+  return cell(`${result} ${game.ourScore}–${game.theirScore}`,
+              result === "W" ? "good" : result === "L" ? "bad" : null);
+}
+
+function offenseDetail({ perGame, off, t, n, G }) {
+  const gameLog = {
+    headers: ["Game", "Result", "Poss", "PPP", "Touch", "PPP touch", "PPP no touch", "TO", "Pts logged"],
+    numeric: [2, 3, 4, 5, 6, 7, 8],
+    rows: perGame.map(({ game, off: o }) => {
+      const gt = o.touchSplit.withTouches;
+      const gn = o.touchSplit.noTouches;
+      return {
+        cells: [
+          gameCell(game), resultCell(game), String(o.overall.possessions), f2(o.overall.ppp),
+          pc(rate(gt.possessions, o.overall.possessions)), f2(gt.ppp), f2(gn.ppp), pc(o.overall.toRate),
+          // Says out loud how much of the game reached the record, so nobody
+          // reads the app's points as the scoreboard.
+          game.ourScore == null ? String(o.overall.points) : `${o.overall.points} of ${game.ourScore}`,
+        ],
+      };
+    }).concat([{
+      total: true,
+      cells: [
+        `${G} game${G === 1 ? "" : "s"}`, "", String(off.overall.possessions), f2(off.overall.ppp),
+        pc(rate(t.possessions, off.overall.possessions)), f2(t.ppp), f2(n.ppp), pc(off.overall.toRate), "",
+      ],
+    }]),
+  };
+
+  const splitRows = (b) => [
+    ["Possessions", String(b.possessions)],
+    ["PPP", f2(b.ppp)],
+    ["Turnover rate", pc(b.toRate)],
+    ["2PT", `${shots(b.m2, b.a2)} · ${pc(rate(b.m2, b.a2))}`],
+    ["3PT", `${shots(b.m3, b.a3)} · ${pc(rate(b.m3, b.a3))}`],
+    ["Free-throw trips", `${b.ft} · ${pc(rate(b.ft, b.possessions))}`],
+    ["PPP leaving turnovers out", f2(pppNoTurnovers(b))],
+  ];
+
+  const split = {
+    withTouch: { title: "With a paint touch", rows: splitRows(t) },
+    without: { title: "Without", rows: splitRows(n) },
+    read:
+      `Without a touch the offense lives on threes (${n.a3} of its ${n.possessions} possessions end in one) and ` +
+      `turnovers (${n.turnovers}). Two-pointers without a touch are rare and poor (${shots(n.m2, n.a2)}). ` +
+      `Part of the gap is built in: a possession lost in the backcourt never had the chance to reach the paint — ` +
+      `so the lesson is as much “don't lose it on the way” as “get there more.”`,
+  };
+
+  const shown = off.byPlay.filter((p) => p.possessions >= FOLD);
+  const folded = off.byPlay.filter((p) => p.possessions < FOLD);
+  const playRows = shown.map((p) =>
+    thinRow([p.name, String(p.possessions), pppCell(p, off.overall.ppp), pc(p.touchRate), pc(p.toRate),
+             shots(p.m3, p.a3)], p.possessions)
+  );
+  if (folded.length) {
+    const points = folded.reduce((s, p) => s + p.points, 0);
+    const poss = folded.reduce((s, p) => s + p.possessions, 0);
+    playRows.push({
+      thin: true,
+      cells: [`${folded.length} other play${folded.length === 1 ? "" : "s"}, under ${FOLD} each`,
+              String(poss), f2(poss ? points / poss : null), "—", "—", "—"],
+    });
+  }
+
+  return {
+    gameLog,
+    split,
+    plays: {
+      headers: ["Play", "Poss", "PPP", "Touch", "TO", "3PT"],
+      numeric: [1, 2, 3, 4, 5],
+      rows: playRows,
+      note: `Green or red means at least 0.15 above or below the team's ${f2(off.overall.ppp)}, on ` +
+            `${MIN_SAMPLE}+ possessions. Grey is too little to read.`,
+    },
+    quarters: {
+      headers: ["Quarter", "Poss", "PPP", "Touch", "TO", "3PT"],
+      numeric: [1, 2, 3, 4, 5],
+      rows: off.byQuarter.map((q) =>
+        thinRow([q.quarter === "OT" ? "Overtime" : `${q.quarter}${["st", "nd", "rd"][q.quarter - 1] || "th"} quarter`,
+                 String(q.possessions), pppCell(q, off.overall.ppp), pc(q.touchRate),
+                 pc(q.toRate), shots(q.m3, q.a3)], q.possessions)
+      ),
+    },
+    players: {
+      headers: ["Player", "Poss touched", "Share", "PPP", "TO"],
+      numeric: [1, 2, 3, 4],
+      rows: off.byPlayer.map((p) =>
+        thinRow([p.number ? `#${p.number} ${p.name}` : p.name, String(p.possessionsTouched),
+                 pc(rate(p.possessionsTouched, t.possessions)),
+                 pppCell({ ppp: p.ppp, possessions: p.possessionsTouched }, t.ppp), pc(p.toRate)],
+                p.possessionsTouched)
+      ),
+      note: "Possessions this player touched the paint in, and what those possessions produced — not the " +
+            "player's own shots or turnovers. The app never records who shot or who lost the ball.",
+    },
+  };
+}
+
+function defenseDetail({ perGame, def, G }) {
+  const gameLog = {
+    headers: ["Game", "Result", "PnR trips", "PPP allowed", "Clean", "PPP clean", "PPP broken", "Forced TO", "FT trips"],
+    numeric: [2, 3, 4, 5, 6, 7, 8],
+    rows: perGame.map(({ game, def: d }) => ({
+      cells: [
+        gameCell(game), resultCell(game), String(d.overall.trips), f2(d.overall.ppp),
+        pc(d.overall.cleanRate), f2(d.executionSplit.clean.ppp), f2(d.executionSplit.broken.ppp),
+        pc(d.overall.forcedTurnoverRate), String(d.overall.ft),
+      ],
+    })).concat([{
+      total: true,
+      cells: [
+        `${G} game${G === 1 ? "" : "s"}`, "", String(def.overall.trips), f2(def.overall.ppp),
+        pc(def.overall.cleanRate), f2(def.executionSplit.clean.ppp), f2(def.executionSplit.broken.ppp),
+        pc(def.overall.forcedTurnoverRate), String(def.overall.ft),
+      ],
+    }]),
+  };
+
+  // Who makes a given breakdown, read back from the per-player lists so the
+  // coverage table can name names without a second pass over possessions.
+  const whoMakes = (mistakeId) =>
+    def.byPlayer
+      .map((p) => ({ name: p.name, n: (p.breakdowns.find((b) => b.id === mistakeId) || {}).count || 0 }))
+      .filter((p) => p.n > 0)
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 3)
+      .map((p) => `${p.name} ${p.n}`)
+      .join(" · ");
+
+  const coverageRows = [];
+  for (const c of def.byCoverage) {
+    coverageRows.push({
+      group: true,
+      cells: [c.name, String(c.trips), pppCell(c, def.overall.ppp, { lowerIsBetter: true }),
+              `clean ${pc(c.cleanRate)}`, `${f2(c.ppp)} allowed`, shots(c.m3 ?? 0, c.a3 ?? 0)],
+    });
+    for (const b of c.breakdowns) {
+      coverageRows.push(thinRow(
+        [`— ${b.name}`, String(b.count), pppCell(b, def.executionSplit.clean.ppp, { lowerIsBetter: true }),
+         `${pc(b.share)} of trips`, whoMakes(b.id) || "no player tagged", shots(b.m3 ?? 0, b.a3 ?? 0)],
+        b.possessions
+      ));
+    }
+  }
+
+  // How many different games a player's breakdowns are spread over: one bad
+  // night reads very differently from the same total every week.
+  const gamesWith = new Map();
+  for (const { game, def: d } of perGame) {
+    for (const p of d.byPlayer) {
+      if (!gamesWith.has(p.id)) gamesWith.set(p.id, new Set());
+      gamesWith.get(p.id).add(game.id);
+    }
+  }
+
+  return {
+    gameLog,
+    coverages: {
+      headers: ["Coverage / breakdown", "Trips", "PPP allowed", "Share", "Who / clean", "3PT allowed"],
+      numeric: [1, 2],
+      rows: coverageRows,
+      note: `Breakdown rows are green or red against the ${f2(def.executionSplit.clean.ppp)} a possession run ` +
+            `right gives up. Only pick-and-roll possessions are tracked.`,
+    },
+    players: {
+      headers: ["Player", "Breakdowns", "Which", "Games"],
+      numeric: [1, 3],
+      rows: def.byPlayer.map((p) => ({
+        cells: [
+          p.number ? `#${p.number} ${p.name}` : p.name,
+          String(p.mistakes),
+          p.breakdowns.slice(0, 2).map((b) => `${b.name} ${b.count}`).join(" · "),
+          String((gamesWith.get(p.id) || new Set()).size),
+        ],
+      })),
+      note: `Counts, not rates: more minutes means more chances. ${def.overall.unassigned} breakdown` +
+            `${def.overall.unassigned === 1 ? "" : "s"} had no player tagged. Every one has a clip time in the ` +
+            `game's defense stats.`,
+    },
+    quarters: {
+      headers: ["Quarter", "Trips", "PPP allowed", "Broken"],
+      numeric: [1, 2, 3],
+      rows: def.byQuarter.map((q) => ({
+        cells: [q.quarter === "OT" ? "Overtime" : `${q.quarter}${["st", "nd", "rd"][q.quarter - 1] || "th"} quarter`,
+                String(q.trips), pppCell(q, def.overall.ppp, { lowerIsBetter: true }), pc(q.mistakeRate)],
+        thin: q.possessions < MIN_SAMPLE,
+      })),
+    },
+  };
 }

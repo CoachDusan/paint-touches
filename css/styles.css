@@ -1111,3 +1111,37 @@ select {
   .report .card { break-inside: avoid; }
   .report-list li { break-inside: avoid; }
 }
+
+/* Report detail tables — printed as much as read on screen */
+.report-table td {
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.report-table .num,
+.report-table th.num {
+  text-align: right;
+}
+
+/* Grey means "too little behind this to read": under 20 possessions, one
+   made three swings PPP by 0.15. */
+.report-table tr.is-thin td {
+  color: var(--text-muted);
+}
+
+.report-table tr.is-total td {
+  font-weight: 700;
+  border-top: 1px solid var(--border);
+}
+
+.report-table tr.is-group td {
+  font-weight: 700;
+  background: var(--surface-raised);
+}
+
+.report-table .tone-good { color: #2e9e5b; font-weight: 700; }
+.report-table .tone-bad { color: #d0472b; font-weight: 700; }
+
+.report-section-head {
+  border-left: 3px solid var(--accent);
+}

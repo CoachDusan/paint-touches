@@ -73,7 +73,20 @@ BUILD = """
 
   const entries = games.map((game) => ({ game, possessions: poss.filter((p) => p.gameId === game.id) }));
   const r = m.buildReport(entries);
+  const text = (c) => (typeof c === "string" ? c : c.text);
+  const flat = (rows) => rows.map((row) => row.cells.map(text));
   return {
+    offGameLog: flat(r.offense.gameLog.rows),
+    plays: flat(r.offense.plays.rows),
+    quarters: flat(r.offense.quarters.rows),
+    offPlayers: flat(r.offense.players.rows),
+    playThin: r.offense.plays.rows.map((row) => !!row.thin),
+    coverages: flat(r.defense.coverages.rows),
+    coverageGroups: r.defense.coverages.rows.map((row) => !!row.group),
+    defGameLog: flat(r.defense.gameLog.rows),
+    defPlayers: flat(r.defense.players.rows),
+    splitTouch: r.offense.split.withTouch.rows,
+    splitNone: r.offense.split.without.rows,
     tiles: r.tiles.map((t) => [t.value, t.label]),
     record: r.record,
     findings: r.findings.map((f) => f.lead),
@@ -150,6 +163,36 @@ with sync_playwright() as pw:
     check("the caveats say defence is pick-and-roll only",
           "pick-and-roll possessions only" in r["caveats"], True)
 
+    # --- the detail tables -------------------------------------------------
+    check("a game log row per game, plus a total",
+          [row[0] for row in r["offGameLog"]], ["Alpha · Sep 1, 2026", "Beta · Sep 2, 2026", "2 games"])
+    check("the win is marked as a win", r["offGameLog"][0][1], "W 80–70")
+    check("the total row carries the season numbers",
+          r["offGameLog"][2][2:8], ["80", "1.00", "50%", "2.00", "0.00", "50%"])
+    check("points logged is shown against the final score",
+          r["offGameLog"][0][8], "40 of 80")
+
+    check("the touch panel", r["splitTouch"][:3],
+          [["Possessions", "40"], ["PPP", "2.00"], ["Turnover rate", "0%"]])
+    check("the no-touch panel is all turnovers", r["splitNone"][2], ["Turnover rate", "100%"])
+    check("PPP without turnovers has nothing left to divide", r["splitNone"][6],
+          ["PPP leaving turnovers out", "—"])
+
+    check("by play", r["plays"], [["Fastbreak / No Play", "80", "1.00", "50%", "50%", "—"]])
+    check("80 possessions is not a thin sample", r["playThin"], [False])
+    check("by quarter", r["quarters"], [["1st quarter", "80", "1.00", "50%", "50%", "—"]])
+    check("who gets us to the paint", r["offPlayers"], [["#4 Marko", "40", "100%", "2.00", "0%"]])
+
+    check("defense game log totals",
+          # 40 clean trips of 64 is 62.5%, which rounds to 63%.
+          r["defGameLog"][2][2:9], ["64", "0.75", "63%", "0.00", "2.00", "0%", "0"])
+    check("the coverage groups its breakdowns", r["coverageGroups"], [True, False])
+    check("the coverage row", r["coverages"][0][:4], ["Switch", "64", "0.75", "clean 63%"])
+    check("the breakdown row names who makes it",
+          r["coverages"][1][:5], ["— On ball", "24", "2.00", "38% of trips", "Novak 24"])
+    check("breakdowns by player, across how many games",
+          r["defPlayers"], [["#7 Novak", "24", "On ball 24", "2"]])
+
     thin = page.evaluate(THIN)
     check("nothing is claimed from four possessions", thin["findings"], [])
     check("no priorities either", thin["priorities"], 0)
@@ -178,6 +221,11 @@ with sync_playwright() as pw:
     check("the report screen opens", "Coach report" in screen, True)
     check("it carries the caveats", "How to read these numbers" in screen, True)
     check("it offers a printable copy", page.is_visible('button:has-text("Print / PDF")'), True)
+    check("the offense detail is on the page", "Offense — paint touches" in screen, True)
+    check("the defense detail is on the page", "Defense — pick-and-roll" in screen, True)
+    check("the detail tables render",
+          all(t in screen for t in ["Game log", "By play", "By quarter", "Who gets us to the paint",
+                                    "Coverages and their breakdowns", "Breakdowns by player"]), True)
     check("a one-game report states the paint-touch gap or stays quiet",
           screen.count("Reaching the paint is worth") <= 1, True)
     page.screenshot(path=OUT + "coach-report.png", full_page=True)

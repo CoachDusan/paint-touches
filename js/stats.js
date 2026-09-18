@@ -16,7 +16,8 @@ import { QUARTERS, SIDES, sideOf, endsPossession, playNameOf, NO_MISTAKE } from 
 // say "36% on 50 threes" reads it off the same bucket as PPP instead of
 // walking the possessions again and risking a different answer.
 function emptyBucket() {
-  return { points: 0, possessions: 0, trips: 0, turnovers: 0, fouls: 0, m2: 0, a2: 0, m3: 0, a3: 0, ft: 0 };
+  return { points: 0, possessions: 0, trips: 0, turnovers: 0, fouls: 0,
+           m2: 0, a2: 0, m3: 0, a3: 0, ft: 0, touchPossessions: 0 };
 }
 
 function add(bucket, possession) {
@@ -33,6 +34,9 @@ function add(bucket, possession) {
   if (possession.outcome === "3PM") bucket.m3 += 1;
   if (possession.outcome === "3PM" || possession.outcome === "3PA") bucket.a3 += 1;
   if (possession.outcome === "FT") bucket.ft += 1;
+  // Closed possessions that reached the paint. Defensive records have no
+  // touches at all, so this simply stays zero on that side.
+  if (possession.touches && possession.touches.length > 0) bucket.touchPossessions += 1;
 }
 
 function ppp(bucket) {
@@ -69,15 +73,9 @@ export function computeStats(allPossessions) {
 
     const playKey = p.play ? p.play.playId ?? "transition" : "transition";
     if (!byPlay.has(playKey)) {
-      byPlay.set(playKey, {
-        name: playNameOf(p),
-        ...emptyBucket(),
-        touchPossessions: 0,
-      });
+      byPlay.set(playKey, { name: playNameOf(p), ...emptyBucket() });
     }
-    const playBucket = byPlay.get(playKey);
-    add(playBucket, p);
-    if (closed && p.touches.length > 0) playBucket.touchPossessions += 1;
+    add(byPlay.get(playKey), p);
 
     // Every player who touched this possession shares "credit" for it —
     // counted once each, even if a player touched the ball twice in the
@@ -121,7 +119,10 @@ export function computeStats(allPossessions) {
       noTouches: { ...noTouches, ppp: ppp(noTouches), toRate: toRate(noTouches) },
     },
     byQuarter: [...byQuarter.entries()]
-      .map(([quarter, b]) => ({ quarter, ...b, ppp: ppp(b), toRate: toRate(b) }))
+      .map(([quarter, b]) => ({
+        quarter, ...b, ppp: ppp(b), toRate: toRate(b),
+        touchRate: b.possessions ? b.touchPossessions / b.possessions : null,
+      }))
       .sort((a, b) => (quarterOrder.get(a.quarter) ?? 99) - (quarterOrder.get(b.quarter) ?? 99)),
     byPlay: [...byPlay.entries()]
       .map(([id, b]) => ({
@@ -133,6 +134,12 @@ export function computeStats(allPossessions) {
         turnovers: b.turnovers,
         toRate: toRate(b),
         touchRate: b.possessions ? b.touchPossessions / b.possessions : null,
+        // Shot mix, so a report can show what a set actually produced.
+        m2: b.m2,
+        a2: b.a2,
+        m3: b.m3,
+        a3: b.a3,
+        ft: b.ft,
       }))
       .sort((a, b) => b.possessions - a.possessions),
     byPlayer: [...byPlayer.entries()]
