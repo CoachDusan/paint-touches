@@ -11,8 +11,9 @@
 // Bump this on every deploy that changes an app file. The fetch handler is
 // cache-first, so an unchanged version number means iPads keep serving the
 // old code forever, no matter what's on the server.
-const CACHE_VERSION = "v22";
-const CACHE_NAME = `paint-touches-${CACHE_VERSION}`;
+const CACHE_VERSION = "v23";
+const CACHE_PREFIX = "paint-touches-";
+const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
   "./",
@@ -59,7 +60,17 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((names) => Promise.all(names.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))))
+      // Only this app's own old caches. Every app of Dusan's is served from
+      // coachdusan.github.io, and cache storage belongs to the whole origin,
+      // not to a folder — so deleting "everything that isn't mine" would take
+      // Bench Notes' and Practise Organiser's offline copies with it, and they
+      // would refuse to open in an arena with no signal until they next had
+      // internet. Their data was never at risk; their offline copies were.
+      .then((names) => Promise.all(
+        names
+          .filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      ))
       .then(() => self.clients.claim())
   );
 });

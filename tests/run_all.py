@@ -31,6 +31,7 @@ ORDER = [
     "test_report.py",
     "test_export.py",
     "test_offline.py",
+    "test_cache_neighbours.py",
 ]
 
 

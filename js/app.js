@@ -43,6 +43,20 @@ seedDefensiveDefaults()
     showView(views[initial] ? initial : "roster");
   });
 
+// Ask the device to keep this app's data when storage runs low. A season only
+// exists here — there is no server — so this is worth asking for even though
+// the browser may say no, and Bench Notes, Practise Organiser and Drill
+// Management have asked for it all along. It changes nothing a coach sees, it
+// cannot fail loudly, and a refusal is not a reason to stop opening the app.
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage
+    .persisted()
+    .then((already) => (already ? true : navigator.storage.persist()))
+    .catch(() => {
+      /* Safari in a private window, or an older iPadOS — nothing to do. */
+    });
+}
+
 // Register the offline service worker once it exists (added in Stage 6).
 // Guarded so the app works fine locally before that file is added.
 if ("serviceWorker" in navigator) {
