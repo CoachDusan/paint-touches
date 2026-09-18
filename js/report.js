@@ -12,7 +12,8 @@
 
 import { computeStats, computeDefenseStats } from "./stats.js";
 import { gameResult } from "./models.js";
-import { formatDate } from "./utils.js";
+import { formatDate, formatClock, formatElapsed } from "./utils.js";
+import { SIDES, sideOf, playNameOf, NO_MISTAKE, DEFENSE_OUTCOME_LABELS } from "./possession.js";
 
 // Under this many possessions, one made three moves PPP by 0.15 — so nothing
 // is allowed to claim anything on less.
@@ -67,6 +68,7 @@ export function buildReport(entries) {
     caveats: caveats(ctx),
     offense: offenseDetail(ctx),
     defense: defenseDetail(ctx),
+    lastGame: lastGameDetail(ctx),
   };
 }
 
@@ -571,5 +573,121 @@ function defenseDetail({ perGame, def, G }) {
         thin: q.possessions < MIN_SAMPLE,
       })),
     },
+  };
+}
+
+// ---------------------------------------------------------------------
+// The last game against everything before it.
+//
+// One game is a small sample — 80 possessions on a good night — so this is
+// deliberately a "worth a look" panel and never a trend. A change is only
+// coloured once it clears 0.10 PPP or 5 percentage points, and the note says
+// so. The two lists underneath are the ones that get used on Monday: every
+// breakdown and every turnover, with enough to find the moment on video.
+// ---------------------------------------------------------------------
+
+const PPP_MOVE = 0.1;   // below this a game-to-game change is noise
+const RATE_MOVE = 0.05;
+
+const isClean = (p) => !p.mistake || p.mistake.mistakeId === NO_MISTAKE.id;
+
+const quarterName = (q) => (q === "OT" ? "OT" : `Q${q}`);
+
+// Two clocks, because neither is enough alone: the wall clock matches a phone
+// video's timestamp, the elapsed time matches a recording started at tip-off.
+// A game logged afterwards from video has neither, which the note says.
+const tappedCells = (p, game) => [
+  p.startedAt ? formatClock(p.startedAt) : "—",
+  formatElapsed(p.startedAt, game.createdAt) || "—",
+];
+
+function lastGameDetail({ entries, perGame, G }) {
+  if (G === 0) return null;
+
+  const { game, possessions } = entries[entries.length - 1];
+  const now = perGame[perGame.length - 1];
+  const before = entries.slice(0, -1);
+
+  const metrics = [
+    ["Offense PPP", (s) => s.off.overall.ppp, "ppp", 1],
+    ["Possessions reaching the paint",
+      (s) => rate(s.off.touchSplit.withTouches.possessions, s.off.overall.possessions), "rate", 1],
+    ["PPP with a paint touch", (s) => s.off.touchSplit.withTouches.ppp, "ppp", 1],
+    ["PPP without", (s) => s.off.touchSplit.noTouches.ppp, "ppp", 1],
+    ["Turnover rate", (s) => s.off.overall.toRate, "rate", -1],
+    ["PnR PPP allowed", (s) => s.def.overall.ppp, "ppp", -1],
+    ["PnR trips run clean", (s) => s.def.overall.cleanRate, "rate", 1],
+    ["PPP allowed on a breakdown", (s) => s.def.executionSplit.broken.ppp, "ppp", -1],
+  ];
+
+  let comparison = null;
+  if (before.length) {
+    const prev = totals(before);
+    comparison = {
+      headers: ["", `Previous ${before.length} game${before.length === 1 ? "" : "s"}`,
+                game.opponent || "Last game", "Change"],
+      numeric: [1, 2, 3],
+      rows: metrics.map(([label, read, kind, better]) => {
+        const was = read(prev);
+        const is = read(now);
+        const fmt = kind === "ppp" ? f2 : pc;
+        let change = "—";
+        if (was !== null && was !== undefined && is !== null && is !== undefined) {
+          const diff = is - was;
+          const shown = kind === "ppp"
+            ? `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}`
+            : `${diff >= 0 ? "+" : ""}${Math.round(diff * 100)} pts`;
+          const moved = Math.abs(diff) >= (kind === "ppp" ? PPP_MOVE : RATE_MOVE);
+          change = moved ? cell(shown, diff * better > 0 ? "good" : "bad") : shown;
+        }
+        return { cells: [label, fmt(was), cell(fmt(is), null), change] };
+      }),
+      note: `One game is a small sample — ${now.off.overall.possessions} possessions on offense and ` +
+            `${now.def.overall.trips} pick-and-roll trips. A change is only coloured once it clears ` +
+            `${PPP_MOVE.toFixed(2)} PPP or ${Math.round(RATE_MOVE * 100)} percentage points, and even then it is ` +
+            `worth a look, not a trend.`,
+    };
+  }
+
+  const breakdownRows = possessions
+    .filter((p) => sideOf(p) === SIDES.DEFENSE && !isClean(p))
+    .map((p) => ({
+      cells: [
+        quarterName(p.quarter), ...tappedCells(p, game),
+        p.coverage ? p.coverage.coverageName : "—",
+        p.mistake.mistakeName,
+        p.mistakePlayer
+          ? (p.mistakePlayer.playerNumber ? `#${p.mistakePlayer.playerNumber} ${p.mistakePlayer.playerName}` : p.mistakePlayer.playerName)
+          : "no player tagged",
+        `${DEFENSE_OUTCOME_LABELS[p.outcome] || p.outcome} · ${p.points}`,
+      ],
+    }));
+
+  const turnoverRows = possessions
+    .filter((p) => sideOf(p) === SIDES.OFFENSE && p.outcome === "TO")
+    .map((p) => ({
+      cells: [
+        quarterName(p.quarter), ...tappedCells(p, game), playNameOf(p),
+        // Whether it was lost before the paint or after is the whole point of
+        // the first finding, so it is spelled out for every one of them.
+        p.touches && p.touches.length ? "yes" : cell("no", "bad"),
+      ],
+    }));
+
+  return {
+    game,
+    comparison,
+    breakdowns: {
+      headers: ["Q", "Tapped", "Into game", "Coverage", "Breakdown", "Player", "Result"],
+      numeric: [],
+      rows: breakdownRows,
+    },
+    turnovers: {
+      headers: ["Q", "Tapped", "Into game", "Play", "Touch"],
+      numeric: [],
+      rows: turnoverRows,
+    },
+    note: "“Tapped” is the iPad clock when the possession was logged; “into game” counts from when the game " +
+          "was started. A game logged afterwards from video has neither — go by quarter and order instead.",
   };
 }

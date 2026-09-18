@@ -87,6 +87,12 @@ BUILD = """
     defPlayers: flat(r.defense.players.rows),
     splitTouch: r.offense.split.withTouch.rows,
     splitNone: r.offense.split.without.rows,
+    lastOpponent: r.lastGame.game.opponent,
+    lastComparison: flat(r.lastGame.comparison.rows),
+    lastTones: r.lastGame.comparison.rows.map((row) =>
+      (typeof row.cells[3] === "string" ? null : row.cells[3].tone)),
+    lastBreakdowns: flat(r.lastGame.breakdowns.rows),
+    lastTurnovers: flat(r.lastGame.turnovers.rows),
     tiles: r.tiles.map((t) => [t.value, t.label]),
     record: r.record,
     findings: r.findings.map((f) => f.lead),
@@ -97,6 +103,53 @@ BUILD = """
     winRows: r.sides.wins.rows,
     read: r.sides.read,
     caveats: r.caveats,
+  };
+})
+"""
+
+# A season that got better: every possession lost in game one, every one
+# scored in game two. The change has to be coloured, and the clip times have
+# to come out of the timestamps rather than being invented.
+MOVED = """
+() => import('/js/report.js').then((m) => {
+  const START = 1000000;
+  const games = [
+    { id: "a", date: "2026-09-01", opponent: "Before", ourScore: 60, theirScore: 80,
+      status: "completed", currentQuarter: "4", createdAt: START },
+    { id: "b", date: "2026-09-02", opponent: "After", ourScore: 90, theirScore: 70,
+      status: "completed", currentQuarter: "4", createdAt: START },
+  ];
+  const base = (gameId, o) => Object.assign({
+    id: "x" + Math.random(), gameId, quarter: "2", sequenceNumber: 1, side: "offense",
+    touches: [], points: 0, andOne: null, ftAttempt: null,
+    play: { playId: null, playName: "Fastbreak / No Play" },
+  }, o);
+
+  const first = [], second = [];
+  for (let i = 0; i < 20; i++) first.push(base("a", { outcome: "TO", points: 0 }));
+  for (let i = 0; i < 20; i++) {
+    second.push(base("b", { outcome: "2PM", points: 2,
+      touches: [{ playerId: "p1", playerName: "Marko", playerNumber: "4", timestamp: START }] }));
+  }
+  second.push(base("b", {
+    side: "defense", outcome: "3PM", points: 3, startedAt: START + 90000,
+    coverage: { coverageId: "c1", coverageName: "Weak" },
+    mistake: { mistakeId: "m2", mistakeName: "Strong hand" },
+    mistakePlayer: { playerId: "p9", playerName: "Vanin", playerNumber: "21" },
+  }));
+
+  const r = m.buildReport([
+    { game: games[0], possessions: first },
+    { game: games[1], possessions: second },
+  ]);
+  const text = (c) => (typeof c === "string" ? c : c.text);
+  return {
+    rows: r.lastGame.comparison.rows.map((row) => row.cells.map(text)),
+    tones: r.lastGame.comparison.rows.map((row) =>
+      (typeof row.cells[3] === "string" ? null : row.cells[3].tone)),
+    headers: r.lastGame.comparison.headers,
+    breakdown: r.lastGame.breakdowns.rows.map((row) => row.cells.map(text)),
+    touchFlag: r.lastGame.turnovers.rows.length,
   };
 })
 """
@@ -193,6 +246,30 @@ with sync_playwright() as pw:
     check("breakdowns by player, across how many games",
           r["defPlayers"], [["#7 Novak", "24", "On ball 24", "2"]])
 
+    # --- the last game against the rest ------------------------------------
+    check("the last game is the newest one", r["lastOpponent"], "Beta")
+    check("two identical games show no change",
+          r["lastComparison"][0], ["Offense PPP", "1.00", "1.00", "+0.00"])
+    check("and nothing is coloured", set(r["lastTones"]), {None})
+    check("every breakdown of that game is listed", len(r["lastBreakdowns"]), 12)
+    check("a breakdown row carries what film needs",
+          r["lastBreakdowns"][0], ["Q1", "—", "—", "Switch", "On ball", "#7 Novak", "2PT Made · 2"])
+    check("every turnover of that game is listed", len(r["lastTurnovers"]), 20)
+    check("a turnover says whether it reached the paint",
+          r["lastTurnovers"][0][3:], ["Fastbreak / No Play", "no"])
+
+    moved = page.evaluate(MOVED)
+    check("the comparison names the opponent",
+          moved["headers"], ["", "Previous 1 game", "After", "Change"])
+    check("a real improvement is stated",
+          moved["rows"][0], ["Offense PPP", "0.00", "2.00", "+2.00"])
+    check("and coloured as good", moved["tones"][0], "good")
+    check("fewer turnovers is also good, though the number falls",
+          [moved["rows"][4][3], moved["tones"][4]], ["-100 pts", "good"])
+    check("the clip time is read from the timestamps, not invented",
+          moved["breakdown"][0][2:], ["1:30", "Weak", "Strong hand", "#21 Vanin", "3PT Made · 3"])
+    check("a game with no turnovers lists none", moved["touchFlag"], 0)
+
     thin = page.evaluate(THIN)
     check("nothing is claimed from four possessions", thin["findings"], [])
     check("no priorities either", thin["priorities"], 0)
@@ -226,6 +303,11 @@ with sync_playwright() as pw:
     check("the detail tables render",
           all(t in screen for t in ["Game log", "By play", "By quarter", "Who gets us to the paint",
                                     "Coverages and their breakdowns", "Breakdowns by player"]), True)
+    check("the last game gets its own section", "Last game — Report HS" in screen, True)
+    check("with one game there is nothing to compare against",
+          "Nothing to compare it with yet" in screen, True)
+    check("a clean game says so instead of printing an empty table",
+          "No pick-and-roll breakdowns logged in this game." in screen, True)
     check("a one-game report states the paint-touch gap or stays quiet",
           screen.count("Reaching the paint is worth") <= 1, True)
     page.screenshot(path=OUT + "coach-report.png", full_page=True)

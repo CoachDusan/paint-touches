@@ -67,6 +67,17 @@ function tableCard(title, model) {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+// A game with nothing to list is good news, not an empty table.
+function listCard(title, model, emptyText) {
+  if (!model.rows.length) {
+    return el("div", { class: "card" }, [
+      el("div", { class: "section-label" }, title),
+      el("div", { class: "stat-note" }, emptyText),
+    ]);
+  }
+  return tableCard(title, model);
+}
+
 function heading(text, sub) {
   return el("div", { class: "card report-section-head" }, [
     el("div", { class: "report-title" }, text),
@@ -78,6 +89,36 @@ function bullets(items, tag) {
   return el(tag, { class: "report-list" },
     items.map((item) => el("li", {}, [el("strong", {}, item.lead + " "), item.text]))
   );
+}
+
+// The most recent game, set against everything before it — the part that gets
+// used on Monday, with enough on every row to find the moment on video.
+function lastGameSection(r) {
+  const last = r.lastGame;
+  if (!last) return [];
+
+  const stats = r.perGame[r.perGame.length - 1];
+  const score = last.game.ourScore == null || last.game.theirScore == null
+    ? "no score recorded"
+    : `${last.game.ourScore}–${last.game.theirScore}`;
+
+  return [
+    heading(`Last game — ${last.game.opponent || "Game"}`,
+      `${formatDate(last.game.date)} · ${score} · ` +
+      `${plural(stats.off.overall.possessions, "offensive possession")} · ` +
+      `${plural(stats.def.overall.trips, "pick-and-roll trip")}`),
+    last.comparison
+      ? tableCard("Against the season so far", last.comparison)
+      : el("div", { class: "card" }, [
+          el("div", { class: "section-label" }, "Against the season so far"),
+          el("div", { class: "stat-note" }, "Nothing to compare it with yet — this is the only game."),
+        ]),
+    listCard(`Breakdowns to find on video (${last.breakdowns.rows.length})`, last.breakdowns,
+      "No pick-and-roll breakdowns logged in this game."),
+    listCard(`Turnovers (${last.turnovers.rows.length})`, last.turnovers,
+      "No turnovers logged in this game."),
+    el("div", { class: "card" }, [el("div", { class: "stat-note" }, last.note)]),
+  ];
 }
 
 export async function render(root, { onBack } = {}) {
@@ -199,6 +240,8 @@ export async function render(root, { onBack } = {}) {
       tableCard("Coverages and their breakdowns", r.defense.coverages),
       tableCard("Breakdowns by player", r.defense.players),
       tableCard("By quarter", r.defense.quarters),
+
+      ...lastGameSection(r),
     ])
   );
 }
