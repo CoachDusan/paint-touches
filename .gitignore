@@ -1,0 +1,5 @@
+.DS_Store
+
+# The club's own details. Never committed — this repo is public, because
+# GitHub Pages will not serve a private one on a free plan.
+private/
