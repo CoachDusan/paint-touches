@@ -36,14 +36,20 @@ function totals(entries) {
   return { off: computeStats(all), def: computeDefenseStats(all) };
 }
 
-export function buildReport(unordered) {
-  // Oldest first, and for two games on the same date — a tournament day — the
-  // one that finished later is the later game. Sorting on the date alone left
-  // "last game" pointing at whichever the database happened to return first.
-  const entries = [...unordered].sort((a, b) =>
-    (a.game.date || "").localeCompare(b.game.date || "") ||
-    (a.game.completedAt || a.game.createdAt || 0) - (b.game.completedAt || b.game.createdAt || 0)
-  );
+// Oldest first, and for two games on the same date — a tournament day — the
+// one that finished later is the later game. Sorting on the date alone left
+// "last game" pointing at whichever the database happened to return first.
+export function gameOrder(a, b) {
+  return (a.date || "").localeCompare(b.date || "") ||
+    (a.completedAt || a.createdAt || 0) - (b.completedAt || b.createdAt || 0);
+}
+
+// `before` turns this into a one-game report: `unordered` is that game alone,
+// and `before` is every game that came earlier — what it is measured against.
+// Only earlier ones: set against the season as it stood that day, a game's
+// report reads the same in March as it did the morning after.
+export function buildReport(unordered, { before = null } = {}) {
+  const entries = [...unordered].sort((a, b) => gameOrder(a.game, b.game));
   const games = entries.map((e) => e.game);
   const G = games.length;
   const { off, def } = totals(entries);
@@ -63,7 +69,7 @@ export function buildReport(unordered) {
       ? ((broken.ppp - clean.ppp) * broken.possessions) / G
       : null;
 
-  const ctx = { entries, games, G, off, def, perGame, t, n, clean, broken, costPerGame };
+  const ctx = { entries, games, G, off, def, perGame, t, n, clean, broken, costPerGame, before };
 
   return {
     games, G, off, def, perGame, costPerGame,
@@ -108,7 +114,7 @@ function tiles({ off, def, t, n, G, costPerGame }) {
     { value: f2(def.overall.ppp), label: "PnR PPP allowed", note: `${def.overall.possessions} pick-and-roll poss` },
     {
       value: costPerGame === null ? "—" : `≈${Math.round(costPerGame)}`,
-      label: "Points a game lost to PnR breakdowns",
+      label: G === 1 ? "Points lost to PnR breakdowns" : "Points a game lost to PnR breakdowns",
       note: `${def.overall.mistakes} breakdowns in ${G} game${G === 1 ? "" : "s"}`,
     },
   ];
@@ -163,6 +169,18 @@ function winsAndLosses({ entries }) {
   };
 }
 
+// What is left of the paint-touch gap once turnovers are taken out of both
+// sides. It usually shrinks; in a single game it can vanish or flip, and the
+// sentence has to say which.
+function asideTurnovers(t, n) {
+  const tn = pppNoTurnovers(t), nn = pppNoTurnovers(n);
+  if (tn === null || nn === null) return "";
+  const pair = `${f2(tn)} vs ${f2(nn)}`;
+  if (tn <= nn) return `With turnovers set aside the gap is gone — ${pair}. The difference was the turnovers.`;
+  if (tn - nn >= t.ppp - n.ppp) return `With turnovers set aside the gap holds — ${pair}.`;
+  return `With turnovers set aside the gap shrinks to ${pair} — real, but smaller.`;
+}
+
 function findings(ctx) {
   const { off, def, t, n, G, perGame, clean, broken, costPerGame } = ctx;
   const out = [];
@@ -173,24 +191,30 @@ function findings(ctx) {
              g.off.touchSplit.noTouches.ppp !== null &&
              g.off.touchSplit.withTouches.ppp > g.off.touchSplit.noTouches.ppp
     ).length;
-    out.push({
-      lead: `Reaching the paint is worth ${f2(t.ppp - n.ppp)} points a possession.`,
-      text: `${f2(t.ppp)} with a paint touch, ${f2(n.ppp)} without, and the gap held in ${held} of ${G} games. ` +
-            `${pc(rate(t.possessions, off.overall.possessions))} of possessions get there.`,
-    });
+    const share = `${pc(rate(t.possessions, off.overall.possessions))} of possessions get there.`;
+    out.push(t.ppp > n.ppp
+      ? {
+          lead: `Reaching the paint is worth ${f2(t.ppp - n.ppp)} points a possession.`,
+          text: G === 1
+            ? `${f2(t.ppp)} with a paint touch, ${f2(n.ppp)} without. ${share}`
+            : `${f2(t.ppp)} with a paint touch, ${f2(n.ppp)} without, and the gap held in ${held} of ${G} games. ${share}`,
+        }
+      : {
+          lead: "Reaching the paint did not pay here.",
+          text: `${f2(t.ppp)} with a paint touch, ${f2(n.ppp)} without. ${share}`,
+        });
 
     if (off.overall.turnovers > 0) {
       out.push({
         lead: "Possessions that never reach the paint are lost to turnovers.",
         text: `${n.turnovers} of ${off.overall.turnovers} turnovers came on them (${pc(n.toRate)} of those ` +
-              `possessions, against ${pc(t.toRate)} after a touch). With turnovers set aside the gap shrinks to ` +
-              `${f2(pppNoTurnovers(t))} vs ${f2(pppNoTurnovers(n))} — real, but smaller.`,
+              `possessions, against ${pc(t.toRate)} after a touch). ` + asideTurnovers(t, n),
       });
     }
 
     const t3 = rate(t.m3, t.a3);
     const n3 = rate(n.m3, n.a3);
-    if (t3 !== null && n3 !== null) {
+    if (t3 !== null && n3 !== null && Math.min(t.a3, n.a3) >= MIN_SAMPLE) {
       out.push(
         t3 < n3
           ? {
@@ -228,12 +252,16 @@ function findings(ctx) {
     }
   }
 
-  if (costPerGame !== null) {
+  if (costPerGame !== null && broken.possessions >= MIN_SAMPLE && clean.possessions >= MIN_SAMPLE &&
+      broken.ppp - clean.ppp >= PPP_MOVE) {
     out.push({
       lead: `A pick-and-roll breakdown costs ${f2(broken.ppp - clean.ppp)} points.`,
       text: `${f2(clean.ppp)} allowed when the coverage is run right, ${f2(broken.ppp)} when it breaks. ` +
-            `${pc(def.overall.mistakeRate)} of trips break down — about ${Math.round(def.overall.mistakes / G)} a game, ` +
-            `roughly ${Math.round(costPerGame)} points a game.`,
+            (G === 1
+              ? `${pc(def.overall.mistakeRate)} of trips broke down — ${def.overall.mistakes} of them, roughly ` +
+                `${Math.round(costPerGame)} points.`
+              : `${pc(def.overall.mistakeRate)} of trips break down — about ${Math.round(def.overall.mistakes / G)} a game, ` +
+                `roughly ${Math.round(costPerGame)} points a game.`),
     });
   }
 
@@ -255,11 +283,21 @@ function findings(ctx) {
   if (dq.length >= 2) {
     const ranked = [...dq].sort((a, b) => b.mistakeRate - a.mistakeRate);
     const worst = ranked[0], best = ranked[ranked.length - 1];
-    out.push({
-      lead: "The defense is sharpest late, loosest early.",
-      text: `${pc(worst.mistakeRate)} of trips break down in the ${ORD[worst.quarter]} quarter, ` +
-            `${pc(best.mistakeRate)} in the ${ORD[best.quarter]}.`,
-    });
+    // A tie, or near one, is no finding — and "sharpest late" is only true when
+    // the worst quarter really is the earlier one.
+    if (worst.mistakeRate - best.mistakeRate >= RATE_MOVE) {
+      out.push(Number(worst.quarter) < Number(best.quarter)
+        ? {
+            lead: "The defense is sharpest late, loosest early.",
+            text: `${pc(worst.mistakeRate)} of trips break down in the ${ORD[worst.quarter]} quarter, ` +
+                  `${pc(best.mistakeRate)} in the ${ORD[best.quarter]}.`,
+          }
+        : {
+            lead: `Breakdowns peak in the ${ORD[worst.quarter]} quarter`,
+            text: `(${pc(worst.mistakeRate)} of trips) and are rarest in the ${ORD[best.quarter]} ` +
+                  `(${pc(best.mistakeRate)}).`,
+          });
+    }
   }
 
   const covs = def.byCoverage.filter((c) => c.possessions >= MIN_SAMPLE && c.ppp !== null);
@@ -274,11 +312,13 @@ function findings(ctx) {
       const top = [...used].sort((a, b) => b.row.trips - a.row.trips)[0];
       const totalTrips = used.reduce((sum, x) => sum + x.row.trips, 0);
       let text = `— ${f2(best.ppp)} on ${best.possessions} possessions.`;
-      if (top && top.row.trips / totalTrips >= 0.5) {
+      if (G > 1 && top && top.row.trips / totalTrips >= 0.5) {
         const who = top.game.opponent || "one opponent";
         text += used.length === 1
           ? ` But all ${totalTrips} of its trips came against ${who}, so it says more about one game plan than about the coverage.`
-          : ` But it has been used in only ${used.length} of ${G} games, and ${top.row.trips} of its ${totalTrips} trips came against ${who} — too few games to call it better yet.`;
+          : used.length < G
+            ? ` But it has been used in only ${used.length} of ${G} games, and ${top.row.trips} of its ${totalTrips} trips came against ${who} — too few games to call it better yet.`
+            : ` But ${top.row.trips} of its ${totalTrips} trips came against ${who} — too few games to call it better yet.`;
       }
       out.push({ lead: `${best.name} has allowed the fewest points`, text });
     }
@@ -608,12 +648,12 @@ const tappedCells = (p, game) => [
   formatElapsed(p.startedAt, game.createdAt) || "—",
 ];
 
-function lastGameDetail({ entries, perGame, G }) {
+function lastGameDetail({ entries, perGame, G, before: earlier }) {
   if (G === 0) return null;
 
   const { game, possessions } = entries[entries.length - 1];
   const now = perGame[perGame.length - 1];
-  const before = entries.slice(0, -1);
+  const before = earlier || entries.slice(0, -1);
 
   const metrics = [
     ["Offense PPP", (s) => s.off.overall.ppp, "ppp", 1],

@@ -107,6 +107,60 @@ BUILD = """
 })
 """
 
+# One game on its own, measured against the games before it — never the ones
+# after. Game two is built so the paint touch pays overall (1.20 vs 0.90) but
+# not once turnovers are set aside (1.20 vs 3.00): the sentence must say the
+# gap is gone, not "real, but smaller". It has 10 breakdowns, under the
+# 20-possession floor, so their cost is left unsaid. A separate game puts every
+# breakdown in the 4th quarter, which must not come out as "sharpest late".
+ONE_GAME = """
+() => import('/js/report.js').then((m) => {
+  let k = 0;
+  const base = (gameId, o) => Object.assign({
+    id: "o" + (k++), gameId, quarter: "1", sequenceNumber: k, side: "offense",
+    touches: [], points: 0, andOne: null, ftAttempt: null,
+    play: { playId: null, playName: "Fastbreak / No Play" },
+  }, o);
+  const touch = [{ playerId: "pl1", playerName: "Marko", playerNumber: "4", timestamp: 1 }];
+  const g = (id, date, opp) => ({ id, date, opponent: opp, ourScore: 70, theirScore: 60,
+                                   status: "completed", currentQuarter: "4", createdAt: k });
+  const g1 = g("g1", "2026-09-01", "First"), g2 = g("g2", "2026-09-02", "Second"), g3 = g("g3", "2026-09-03", "Third");
+
+  const p1 = [], p2 = [], p3 = [];
+  for (let i = 0; i < 20; i++) p1.push(base("g1", { outcome: "2PM", points: 2, touches: touch }));
+  for (let i = 0; i < 12; i++) p2.push(base("g2", { outcome: "2PM", points: 2, touches: touch }));
+  for (let i = 0; i < 8; i++)  p2.push(base("g2", { outcome: "2PA", points: 0, touches: touch }));
+  for (let i = 0; i < 14; i++) p2.push(base("g2", { outcome: "TO", points: 0 }));
+  for (let i = 0; i < 6; i++)  p2.push(base("g2", { outcome: "3PM", points: 3 }));
+  const def = (gameId, quarter, broken) => base(gameId, {
+    side: "defense", quarter, outcome: broken ? "2PM" : "2PA", points: broken ? 2 : 0,
+    coverage: { coverageId: "c1", coverageName: "Switch" },
+    mistake: broken ? { mistakeId: "m1", mistakeName: "On ball" } : { mistakeId: "none", mistakeName: "No mistake" } });
+  for (let i = 0; i < 10; i++) { p2.push(def("g2", "1", false)); p2.push(def("g2", "1", true)); }
+  for (let i = 0; i < 20; i++) p3.push(def("g3", "1", false));
+  for (let i = 0; i < 20; i++) p3.push(def("g3", "4", i < 10));
+  for (let i = 0; i < 5; i++) { p3.push(base("g3", { outcome: "3PM", points: 3, touches: touch }));
+                                p3.push(base("g3", { outcome: "3PA", points: 0 })); }
+
+  const e = (game, possessions) => ({ game, possessions });
+  const mid = m.buildReport([e(g2, p2)], { before: [e(g1, p1)] });
+  const first = m.buildReport([e(g1, p1)], { before: [] });
+  const late = m.buildReport([e(g3, p3)], { before: [] });
+  const leads = (r) => r.findings.map((f) => f.lead);
+  const text = (r, part) => ((r.findings.find((f) => f.lead.indexOf(part) >= 0) || {}).text) || "";
+  return {
+    midG: mid.G, midGame: mid.lastGame.game.opponent,
+    midHeader: mid.lastGame.comparison && mid.lastGame.comparison.headers,
+    midPaint: text(mid, "Reaching the paint"),
+    midAside: text(mid, "never reach the paint"),
+    midLeads: leads(mid),
+    midTile: mid.tiles[4].label,
+    firstComparison: first.lastGame.comparison,
+    lateLeads: leads(late),
+  };
+})
+"""
+
 # A season that got better: every possession lost in game one, every one
 # scored in game two. The change has to be coloured, and the clip times have
 # to come out of the timestamps rather than being invented.
@@ -264,6 +318,26 @@ with sync_playwright() as pw:
     check("the most common breakdown is named",
           "On ball is the most common breakdown" in r["findings"], True)
 
+    # --- one game on its own ----------------------------------------------
+    o = page.evaluate(ONE_GAME)
+    check("a one-game report is that game alone", [o["midG"], o["midGame"]], [1, "Second"])
+    check("measured against the games before it", o["midHeader"],
+          ["", "Previous 1 game", "Second", "Change"])
+    check("the first game of a season has nothing before it", o["firstComparison"], None)
+    check("one game does not say 'held in 1 of 1'", "held in" in o["midPaint"], False)
+    check("a gap that is only turnovers says so",
+          "gap is gone — 1.20 vs 3.00" in o["midAside"], True)
+    check("and never calls it 'real, but smaller'", "real, but smaller" in o["midAside"], False)
+    check("breakdown cost is not claimed from 10 breakdowns",
+          any("breakdown costs" in l for l in o["midLeads"]), False)
+    check("the breakdown tile drops 'a game' for one game", o["midTile"], "Points lost to PnR breakdowns")
+    check("breakdowns in the 4th are not called 'sharpest late'",
+          "The defense is sharpest late, loosest early." in o["lateLeads"], False)
+    check("they are named where they peak",
+          "Breakdowns peak in the 4th quarter" in o["lateLeads"], True)
+    check("threes are not compared on 5 attempts a side",
+          any("Threes are" in l for l in o["lateLeads"]), False)
+
     check("priorities start with the ball",
           r["priorities"][0], "Protect the ball before the paint.")
     check("the breakdown priority names who",
@@ -396,6 +470,34 @@ with sync_playwright() as pw:
 
     page.click('button:has-text("← Season")'); page.wait_for_timeout(700)
     check("back returns to Season", page.is_visible('button:has-text("Open the coach report")'), True)
+
+    # A single game's report, reached from that game in History.
+    page.click('.tab-bar button[data-view="history"]'); page.wait_for_timeout(700)
+    page.click('.list-row:has-text("Report HS")'); page.wait_for_timeout(700)
+    GAME_BTN = 'button:has-text("Open this game\'s report")'
+    check("a finished game offers its own report", page.is_visible(GAME_BTN), True)
+    page.click(GAME_BTN); page.wait_for_timeout(900)
+    one = page.text_content(".report")
+    check("it opens as a game report", page.inner_text("h1.screen-title"), "Game report")
+    check("titled with the opponent", "vs Report HS · paint touches" in one, True)
+    check("its comparison section is about this game", "This game against the season" in one, True)
+    check("the first game says nothing came before it",
+          "no game was finished before this one" in one, True)
+    check("no one-row game log", "Game log" in one, False)
+    page.click('button:has-text("← Game")'); page.wait_for_timeout(700)
+    check("back returns to the game", page.is_visible(GAME_BTN), True)
+
+    # The season's date range reads oldest to newest. The database hands games
+    # back newest first, which once printed "Sep 20, 2026 – Aug 29, 2026".
+    page.evaluate("""() => import('/js/db.js').then(async (m) => {
+      const db = await m.getDB();
+      await db.put("games", { id: "early", date: "2026-01-05", opponent: "January", status: "completed",
+                              currentQuarter: "4", createdAt: 1, completedAt: 1 });
+    })""")
+    page.click('.tab-bar button[data-view="season"]'); page.wait_for_timeout(800)
+    page.click('button:has-text("Open the coach report")'); page.wait_for_timeout(900)
+    rng = page.inner_text(".report-head .stat-note")
+    check("the season's range starts with its first game", rng.startswith("Jan 5, 2026 – "), True)
 
     check("no console errors", errs, [])
     b.close()

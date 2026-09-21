@@ -9,6 +9,7 @@ import { computeStats } from "../stats.js";
 import { renderGameStats } from "./game-stats.js";
 import { renderExportActions } from "./export-actions.js";
 import { buildGameSummaryText, buildCSV } from "../export.js";
+import * as report from "./report.js";
 
 export async function render(root) {
   const games = await Games.listCompleted();
@@ -327,6 +328,18 @@ export async function render(root) {
           el("button", { class: "btn btn-sm", onclick: showList }, "← All games"),
         ]),
         editing ? buildDetailsForm(game, () => showDetail(game, stats)) : header,
+        // Near the top: this is what gets opened the morning after.
+        el("div", { class: "card" }, [
+          el("div", { class: "section-label" }, "Game report"),
+          el("div", { class: "stat-note" },
+            "The coach report for this game alone, set against the games finished before it. Print it or save it as a PDF."),
+          el("button", {
+            class: "btn btn-primary btn-block",
+            onclick: () => report.render(root, {
+              gameId: game.id, backLabel: "← Game", onBack: () => showDetail(game, stats),
+            }),
+          }, "Open this game's report"),
+        ]),
         renderGameStats(summary.possessions, summary.tagEvents, { gameStart: game.createdAt }),
         buildTagEditor(game, summary, () => showDetail(game, stats)),
         renderExportActions({

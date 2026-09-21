@@ -291,25 +291,44 @@ def top_players(A, rs, k=2):
 
 # ---------------------------------------------------------------- page 1
 
+def aside_turnovers(t, n):
+    """What is left of the paint-touch gap with turnovers out of both sides.
+    It usually shrinks; in a small slice it can vanish or flip. Same wording
+    as asideTurnovers() in js/report.js."""
+    tn, nn = t["ppp_no_to"], n["ppp_no_to"]
+    if tn is None or nn is None:
+        return ""
+    pair = f"{f2(tn)} vs {f2(nn)}"
+    if tn <= nn:
+        return f"With turnovers set aside the gap is gone — {pair}. The difference was the turnovers."
+    if tn - nn >= t["ppp"] - n["ppp"]:
+        return f"With turnovers set aside the gap holds — {pair}."
+    return f"With turnovers set aside the gap shrinks to {pair} — real, but smaller."
+
+
 def findings(A):
     o, t, n, d, dc, db, G = A["o"], A["t"], A["n"], A["d"], A["dc"], A["db"], A["G"]
     out = []
 
     gap_games = sum(1 for pg in A["per_game"] if pg["t"]["ppp"] is not None and pg["n"]["ppp"] is not None
                     and pg["t"]["ppp"] > pg["n"]["ppp"])
-    out.append(
-        f"<b>Reaching the paint is worth {f2(t['ppp'] - n['ppp'])} points a possession.</b> "
-        f"{f2(t['ppp'])} with a paint touch, {f2(n['ppp'])} without, and the gap held in "
-        f"{gap_games} of {G} games. {pc(t['poss'], o['poss'])} of possessions get there."
-    )
+    share = f"{pc(t['poss'], o['poss'])} of possessions get there."
+    if t["ppp"] <= n["ppp"]:
+        out.append(f"<b>Reaching the paint did not pay here.</b> {f2(t['ppp'])} with a paint touch, "
+                   f"{f2(n['ppp'])} without. {share}")
+    else:
+        held = "" if G == 1 else f", and the gap held in {gap_games} of {G} games"
+        out.append(
+            f"<b>Reaching the paint is worth {f2(t['ppp'] - n['ppp'])} points a possession.</b> "
+            f"{f2(t['ppp'])} with a paint touch, {f2(n['ppp'])} without{held}. {share}"
+        )
     out.append(
         f"<b>Possessions that never reach the paint are lost to turnovers.</b> "
         f"{n['to']} of {o['to']} turnovers came on them ({pc(n['to'], n['poss'])} of those possessions, "
-        f"against {pc(t['to'], t['poss'])} after a touch). With turnovers set aside the gap shrinks to "
-        f"{f2(t['ppp_no_to'])} vs {f2(n['ppp_no_to'])} — real, but smaller."
+        f"against {pc(t['to'], t['poss'])} after a touch). " + aside_turnovers(t, n)
     )
     t3, n3 = rate(t["m3"], t["a3"]), rate(n["m3"], n["a3"])
-    if t3 is not None and n3 is not None:
+    if t3 is not None and n3 is not None and min(t["a3"], n["a3"]) >= MIN_SAMPLE:
         if t3 < n3:
             out.append(
                 f"<b>Threes are not better after a touch — yet.</b> {pc(t3)} on {t['a3']} kick-out threes "
@@ -342,7 +361,9 @@ def findings(A):
             )
 
     cost = (db["ppp"] - dc["ppp"]) * db["poss"] / G if db["ppp"] is not None and dc["ppp"] is not None else None
-    if cost is not None:
+    # Same floor as every other claim, and a gap wide enough to be a sentence.
+    if (cost is not None and db["poss"] >= MIN_SAMPLE and dc["poss"] >= MIN_SAMPLE
+            and db["ppp"] - dc["ppp"] >= 0.10):
         out.append(
             f"<b>A pick-and-roll breakdown costs {f2(db['ppp'] - dc['ppp'])} points.</b> "
             f"{f2(dc['ppp'])} allowed when the coverage is run right, {f2(db['ppp'])} when it breaks. "
@@ -366,9 +387,9 @@ def findings(A):
 
     dq = [(q, bucket([r for r in A["dfn"] if r["quarter"] == q])) for q in QUARTERS[:4]]
     dq = [x for x in dq if x[1]["trips"] >= MIN_SAMPLE]
-    if len(dq) >= 2:
-        worst = max(dq, key=lambda x: rate(x[1]["broken"], x[1]["trips"]))
-        best = min(dq, key=lambda x: rate(x[1]["broken"], x[1]["trips"]))
+    worst = max(dq, key=lambda x: rate(x[1]["broken"], x[1]["trips"])) if len(dq) >= 2 else None
+    best = min(dq, key=lambda x: rate(x[1]["broken"], x[1]["trips"])) if len(dq) >= 2 else None
+    if worst and rate(worst[1]["broken"], worst[1]["trips"]) - rate(best[1]["broken"], best[1]["trips"]) >= 0.05:
         out.append(
             f"<b>The defense is sharpest late, loosest early.</b> {pc(worst[1]['broken'], worst[1]['trips'])} of "
             f"trips break down in the {ORD[worst[0]]} quarter, {pc(best[1]['broken'], best[1]['trips'])} in the "
@@ -392,9 +413,12 @@ def findings(A):
                 if in_game == len(rs):
                     text += (f" But all {in_game} of its trips came against {esc(opp)}, so it says more about "
                              f"one game plan than about the coverage.")
-                else:
+                elif len(per_game) < G:
                     text += (f" But it has been used in only {len(per_game)} of {G} games, and {in_game} of its "
                              f"{len(rs)} trips came against {esc(opp)} — too few games to call it better yet.")
+                else:
+                    text += (f" But {in_game} of its {len(rs)} trips came against {esc(opp)} — too few games to "
+                             f"call it better yet.")
             else:
                 text += " A small sample, and it may be called in easier spots, but worth testing more."
             out.append(text)
@@ -492,6 +516,7 @@ def page_summary(A, total):
     cost = (db["ppp"] - dc["ppp"]) * db["poss"] / G
     f = findings(A)
     half = (len(f) + 1) // 2
+    wl = wins_losses(A)
     body = f"""
     <header class="top">
       <div><h1>{TEAM} — Paint Touches &amp; PnR Defense</h1>
@@ -505,8 +530,7 @@ def page_summary(A, total):
       {tile(f2(d['ppp']), "PnR PPP allowed", f"{d['poss']} pick-and-roll poss")}
       {tile(f"≈{cost:.0f}", "Points a game lost to PnR breakdowns", f"{d['broken']} breakdowns in {G} games")}
     </div>
-    {section("Wins vs losses — what the tracking adds")}
-    {wins_losses(A)}
+    {section("Wins vs losses — what the tracking adds") + wl if wl else ""}
     {section(f"What the {WORDS.get(G, G).lower()} games say")}
     <div class="cols2"><ul class="find">{"".join(f"<li>{x}</li>" for x in f[:half])}</ul>
       <ul class="find">{"".join(f"<li>{x}</li>" for x in f[half:])}</ul></div>
@@ -696,7 +720,7 @@ def page_defense(A, total):
     {section("Coverages and their breakdowns")}
     {cov_t}
     <div class="note">Clean / broken PPP = points allowed when that coverage was run right vs when it broke down. Breakdown rows: green/red against the {f2(dc['ppp'])} a clean possession allows.</div>
-    <div class="cols2">
+    <div class="cols2 wide-left">
       <div>{section("Breakdowns by player")}{p_t}
         <div class="note">Counts, not rates: more minutes means more chances. {unassigned} breakdown{'s' if unassigned != 1 else ''} had no player tagged. Every one has a video clip time in the app's defense stats.</div></div>
       <div>{section("By quarter")}{q_t}{tag_html}</div>
@@ -743,7 +767,7 @@ def page_last_game(A, total):
             cls = ("good" if diff * better > 0 else "bad") if big else ""
             change = f'<span class="{cls}">{shown}</span>'
         rows.append(([name, fmt(b_val), f"<b>{fmt(n_val)}</b>", change], ""))
-    cmp_t = table([("", ""), (f"Previous {len(games) - 1} games", "num"), (esc(last["label"]), "num"), ("Change", "num")], rows)
+    cmp_t = table([("", ""), (f"Previous {len(games) - 1} game{'s' if len(games) != 2 else ''}", "num"), (esc(last["label"]), "num"), ("Change", "num")], rows)
 
     br = [r for r in ld if not clean(r)]
     br_rows = [([ORD.get(r["quarter"], r["quarter"]), r["clock_time"], esc(r["coverage"]), esc(r["mistake"]),
@@ -796,7 +820,7 @@ h1 { font-size: 17pt; margin: 0; line-height: 1.15; }
 h2 { color: #1d4f91; font-size: 9.6pt; letter-spacing: .12em; text-transform: uppercase; border-bottom: 1px solid #1d4f91; padding-bottom: 1mm; margin: 3.6mm 0 1.8mm; }
 table { width: 100%; border-collapse: collapse; font-size: 7.9pt; }
 th { text-align: left; font-size: 6.3pt; letter-spacing: .08em; text-transform: uppercase; color: #5b6570; font-weight: 600; border-bottom: 1px solid #c9d0d8; padding: .8mm 1mm; }
-td { padding: .75mm 1mm; border-bottom: 1px solid #eceff2; vertical-align: top; }
+td { padding: .5mm 1mm; border-bottom: 1px solid #eceff2; vertical-align: top; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.thin td { color: #9aa3ac; }
 tr.thin td .good, tr.thin td .bad { color: inherit; font-weight: inherit; }
@@ -815,6 +839,7 @@ tr.group td { background: #f4f6f9; }
 .panel p { margin: 0; }
 .kv { display: flex; justify-content: space-between; gap: 2mm; padding: .25mm 0; }
 .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+.cols2.wide-left { grid-template-columns: 1.3fr 1fr; }
 ul.find, ol.find { margin: 0; padding-left: 4mm; }
 .find li { margin-bottom: 1.3mm; }
 ol.prio { columns: 2; column-gap: 5mm; padding-left: 5mm; }
