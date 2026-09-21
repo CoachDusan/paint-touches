@@ -499,6 +499,24 @@ with sync_playwright() as pw:
     rng = page.inner_text(".report-head .stat-note")
     check("the season's range starts with its first game", rng.startswith("Jan 5, 2026 – "), True)
 
+    # A report that cannot be built must say so. The button doesn't wait for
+    # the report, so a failure used to vanish and the tap did nothing at all.
+    # A date stored as a number is enough to make the ordering throw.
+    page.click('button:has-text("← Season")'); page.wait_for_timeout(600)
+    page.evaluate("""() => import('/js/db.js').then(async (m) => {
+      const db = await m.getDB();
+      await db.put("games", { id: "broken", date: 20260106, opponent: "Broken", status: "completed",
+                              currentQuarter: "4", createdAt: 2, completedAt: 2 });
+    })""")
+    errs_before = len(errs)
+    page.click('button:has-text("Open the coach report")'); page.wait_for_timeout(900)
+    check("a failed report says so instead of doing nothing",
+          page.is_visible('text=The report could not be built'), True)
+    check("and shows what went wrong", "TypeError" in (page.text_content(".report-error") or ""), True)
+    check("with a way back", page.is_visible('button:has-text("← Season")'), True)
+    del errs[errs_before:]   # the failure is the point of this check, not a stray error
+    page.evaluate("""() => import('/js/db.js').then(async (m) => (await m.getDB()).delete("games", "broken"))""")
+
     check("no console errors", errs, [])
     b.close()
 srv.terminate()

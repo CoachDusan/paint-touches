@@ -126,7 +126,37 @@ function lastGameSection(r, single) {
 // With `gameId`, the report of that one game, measured against the games
 // finished before it. Without, the whole season. Same screen, same builder —
 // a single game is just a smaller selection.
-export async function render(root, { onBack, backLabel = "← Season", gameId = null } = {}) {
+// The button that opens this doesn't wait for it, so anything thrown while the
+// report is built used to vanish: the coach tapped and nothing happened, with
+// no way to tell why. Now it lands on screen, with the line it came from —
+// enough to find it from a photo of the iPad.
+export async function render(root, options = {}) {
+  try {
+    await renderReport(root, options);
+  } catch (err) {
+    showFailure(root, options, err);
+  }
+}
+
+function showFailure(root, { onBack, backLabel = "← Season" }, err) {
+  const where = String((err && err.stack) || "").split("\n").filter(Boolean).slice(0, 3).join("\n");
+  root.replaceChildren(
+    el("div", { class: "screen" }, [
+      el("div", { class: "list-toolbar" }, [
+        el("h1", { class: "screen-title" }, "Coach report"),
+        onBack ? el("button", { class: "btn btn-sm", onclick: onBack }, backLabel) : null,
+      ]),
+      el("div", { class: "card" }, [
+        el("div", { class: "section-label" }, "The report could not be built"),
+        el("div", { class: "stat-note" },
+          "Nothing was changed or lost — your games are untouched. Take a photo of this box and send it over; it says exactly where it went wrong."),
+        el("pre", { class: "report-error" }, `${(err && err.name) || "Error"}: ${(err && err.message) || err}\n${where}`),
+      ]),
+    ])
+  );
+}
+
+async function renderReport(root, { onBack, backLabel = "← Season", gameId = null } = {}) {
   const games = await Games.listCompleted();
 
   const backBar = (extra = []) =>
