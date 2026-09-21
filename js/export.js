@@ -6,7 +6,7 @@
 import { formatDate, formatPPP, formatClock, formatElapsed } from "./utils.js";
 import { computeStats, computeDefenseStats, computeTagStats } from "./stats.js";
 import { gameResult, VENUES } from "./models.js";
-import { SIDES, sideOf, playNameOf } from "./possession.js";
+import { SIDES, sideOf, playNameOf, mistakeNameOf } from "./possession.js";
 
 const venueLabel = (key) => VENUES.find((v) => v.key === key)?.label || "";
 
@@ -185,7 +185,7 @@ export function buildCSV(entries) {
         // name, not the one stored when it was tapped. Defence has no play.
         play: sideOf(p) === SIDES.OFFENSE ? playNameOf(p) : "",
         coverage: p.coverage?.coverageName || "",
-        mistake: p.mistake?.mistakeName || "",
+        mistake: mistakeNameOf(p.mistake),
         mistake_player: p.mistakePlayer ? `#${p.mistakePlayer.playerNumber || "--"} ${p.mistakePlayer.playerName}` : "",
         paint_touches: (p.touches || []).map((t) => `#${t.playerNumber || "--"}`).join(" "),
         outcome: p.outcome,

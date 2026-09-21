@@ -93,7 +93,7 @@ export async function render(root, game) {
             // On a defensive possession `points` is points *allowed*. Stats
             // must never mix these with offensive points — see computeStats.
             coverage: state.currentDef.coverage,
-            mistake: state.currentDef.mistake || NO_MISTAKE,
+            mistake: state.currentDef.mistake || { mistakeId: NO_MISTAKE.id, mistakeName: NO_MISTAKE.name },
             mistakePlayer: state.currentDef.player,
             play: null,
             touches: [],

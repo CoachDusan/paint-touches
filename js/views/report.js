@@ -32,7 +32,10 @@ function panel(title, rows, tone) {
 // earned green, red or grey; this only draws it.
 function table(model) {
   const numeric = new Set(model.numeric || []);
-  const draw = (c) => (typeof c === "string" ? { text: c } : c);
+  // A blank cell prints as a dash. One nameless breakdown used to throw here
+  // and take the whole report down with it.
+  const draw = (c) => (c === null || c === undefined ? { text: "—" }
+    : typeof c === "object" ? c : { text: String(c) });
 
   return el("div", { class: "stat-table-wrap" }, [
     el("table", { class: "stat-table report-table" }, [

@@ -3,7 +3,7 @@
 // frozen possession list) — same function, same math, so live and
 // historical numbers can never disagree with each other.
 
-import { QUARTERS, SIDES, sideOf, endsPossession, playNameOf, NO_MISTAKE } from "./possession.js";
+import { QUARTERS, SIDES, sideOf, endsPossession, playNameOf, isNoMistake } from "./possession.js";
 
 // Two totals, not one. `trips` is everything that was tapped; `possessions`
 // is only what actually ended a trip down the floor, and it is the only
@@ -185,7 +185,7 @@ export function computeStats(allPossessions) {
 // ---------------------------------------------------------------------
 
 function isClean(possession) {
-  return !possession.mistake || possession.mistake.mistakeId === NO_MISTAKE.id;
+  return isNoMistake(possession.mistake);
 }
 
 export function computeDefenseStats(allPossessions) {

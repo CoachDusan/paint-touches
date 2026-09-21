@@ -202,6 +202,40 @@ with sync_playwright() as pw:
     check("Switch's list is shorter than Drop's", len(onSwitch) < len(onDrop), True)
     check("No mistake is always offered", "No mistake" in onSwitch, True)
 
+    # A trip closed without tapping any breakdown is "No mistake" — and must be
+    # saved in the shape every reader expects. From 13 Aug to 21 Sep 2026 it was
+    # saved as { id, name }, read everywhere as a nameless breakdown, and that
+    # was what stopped the coach report from opening.
+    page.click('.outcome-btn:has-text("2PT Missed")'); page.wait_for_timeout(500)
+    saved = page.evaluate("""() => import('/js/db.js').then(async (m) => {
+      const all = await (await m.getDB()).getAll("possessions");
+      const g = all.filter((p) => p.side === "defense").pop();
+      return g && g.mistake; })""")
+    check("an untapped breakdown is saved as No mistake, in the readable shape",
+          saved, {"mistakeId": "none", "mistakeName": "No mistake"})
+
+    # And the records already saved the old way are read as clean — counted,
+    # exported and reported as "No mistake", never as a nameless breakdown.
+    legacy = page.evaluate("""() => Promise.all([import('/js/stats.js'), import('/js/export.js'), import('/js/report.js')])
+      .then(([stats, exp, rep]) => {
+        const game = { id: "L", date: "2026-09-20", opponent: "Legacy", status: "completed",
+                       currentQuarter: "4", createdAt: 1, completedAt: 1 };
+        const trip = (mistake, i) => ({ id: "l" + i, gameId: "L", quarter: "1", sequenceNumber: i, side: "defense",
+          outcome: "3PA", points: 0, touches: [], play: null, startedAt: 1000 + i,
+          coverage: { coverageId: "c", coverageName: "Switch" }, mistake, mistakePlayer: null });
+        const poss = [trip({ id: "none", name: "No mistake" }, 1), trip({ mistakeId: "none", mistakeName: "No mistake" }, 2)];
+        const d = stats.computeDefenseStats(poss);
+        const csv = exp.buildCSV([{ game, possessions: poss, tagEvents: [] }]);
+        const r = rep.buildReport([{ game, possessions: poss }]);
+        return { breakdowns: d.overall.mistakes, clean: d.overall.cleanRate,
+                 csvNoMistake: (csv.match(/"No mistake"/g) || []).length,
+                 reportBreakdowns: r.lastGame.breakdowns.rows.length };
+      })""")
+    check("an old-shape No mistake is not a breakdown", legacy["breakdowns"], 0)
+    check("it counts as run clean", legacy["clean"], 1)
+    check("it exports as No mistake", legacy["csvNoMistake"], 2)
+    check("and the report lists no breakdown for it", legacy["reportBreakdowns"], 0)
+
     check("no console errors", errs, [])
     b.close()
 srv.terminate()

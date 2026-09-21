@@ -105,6 +105,23 @@ export function playNameOf(possession) {
 // not an absence — without it there's no denominator to judge a coverage by.
 export const NO_MISTAKE = { id: "none", name: "No mistake" };
 
+// "We ran it right", read off a stored possession. From 13 Aug to 21 Sep 2026
+// a trip closed without tapping a breakdown was saved as NO_MISTAKE itself —
+// { id, name } where every reader expects { mistakeId, mistakeName } — so it
+// was read as a breakdown with no name: counted against the defense, and
+// enough to stop the coach report from opening. 8 of 348 trips in the first
+// nine games. Old records are read as what they were meant to be rather than
+// rewritten, so nothing stored is touched.
+export function isNoMistake(mistake) {
+  return !mistake || mistake.mistakeId === NO_MISTAKE.id || mistake.id === NO_MISTAKE.id;
+}
+
+// The breakdown's name as stored, or "No mistake" for a clean trip in either shape.
+export function mistakeNameOf(mistake) {
+  if (!mistake) return "";
+  return isNoMistake(mistake) ? NO_MISTAKE.name : mistake.mistakeName || "";
+}
+
 // One tap per valid free-throw trip (up to 3 attempts covers every normal
 // game situation: 1-and-1, 2-shot foul, 3-shot foul/technicals).
 export const FT_COMBOS = [

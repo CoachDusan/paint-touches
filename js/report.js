@@ -13,7 +13,7 @@
 import { computeStats, computeDefenseStats } from "./stats.js";
 import { gameResult } from "./models.js";
 import { formatDate, formatClock, formatElapsed } from "./utils.js";
-import { SIDES, sideOf, playNameOf, NO_MISTAKE, DEFENSE_OUTCOME_LABELS } from "./possession.js";
+import { SIDES, sideOf, playNameOf, isNoMistake, DEFENSE_OUTCOME_LABELS } from "./possession.js";
 
 // Under this many possessions, one made three moves PPP by 0.15 — so nothing
 // is allowed to claim anything on less.
@@ -636,7 +636,7 @@ function defenseDetail({ perGame, def, G }) {
 const PPP_MOVE = 0.1;   // below this a game-to-game change is noise
 const RATE_MOVE = 0.05;
 
-const isClean = (p) => !p.mistake || p.mistake.mistakeId === NO_MISTAKE.id;
+const isClean = (p) => isNoMistake(p.mistake);
 
 const quarterName = (q) => (q === "OT" ? "OT" : `Q${q}`);
 
@@ -702,7 +702,7 @@ function lastGameDetail({ entries, perGame, G, before: earlier }) {
       cells: [
         quarterName(p.quarter), ...tappedCells(p, game),
         p.coverage ? p.coverage.coverageName : "—",
-        p.mistake.mistakeName,
+        p.mistake.mistakeName || "unnamed breakdown",
         p.mistakePlayer
           ? (p.mistakePlayer.playerNumber ? `#${p.mistakePlayer.playerNumber} ${p.mistakePlayer.playerName}` : p.mistakePlayer.playerName)
           : "no player tagged",
