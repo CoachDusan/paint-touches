@@ -100,6 +100,11 @@ def bucket(rs):
     }
 
 
+# "1 game", "9 games". One game read "1 games" and "What the one games say".
+def n_games(G):
+    return f"{G} game{'' if G == 1 else 's'}"
+
+
 def rate(x, y):
     return x / y if y else None
 
@@ -367,8 +372,10 @@ def findings(A):
         out.append(
             f"<b>A pick-and-roll breakdown costs {f2(db['ppp'] - dc['ppp'])} points.</b> "
             f"{f2(dc['ppp'])} allowed when the coverage is run right, {f2(db['ppp'])} when it breaks. "
-            f"{pc(d['broken'], d['trips'])} of trips break down — about {d['broken'] / G:.0f} a game, "
-            f"roughly {cost:.0f} points a game."
+            (f"{pc(d['broken'], d['trips'])} of trips broke down — {d['broken']} of them, roughly {cost:.0f} points."
+             if G == 1 else
+             f"{pc(d['broken'], d['trips'])} of trips break down — about {d['broken'] / G:.0f} a game, "
+             f"roughly {cost:.0f} points a game.")
         )
 
     big = [(m, b) for m, b in A["mistakes"] if b["trips"] >= LIST_FLOOR]
@@ -428,14 +435,16 @@ def findings(A):
 def priorities(A):
     o, n, G = A["o"], A["n"], A["G"]
     out = [
-        f"<b>Protect the ball before the paint.</b> About {n['to'] / G:.0f} turnovers a game come on possessions "
-        f"that never touch it. The biggest single leak on offense."
+        (f"<b>Protect the ball before the paint.</b> {n['to']} turnovers came on possessions that never touched it. "
+         if G == 1 else
+         f"<b>Protect the ball before the paint.</b> About {n['to'] / G:.0f} turnovers a game come on possessions "
+         f"that never touch it. ") + "The biggest single leak on offense."
     ]
     big = [(m, b) for m, b in A["mistakes"] if b["trips"] >= LIST_FLOOR]
     if big:
         m, b = big[0]
         rs = [r for r in A["broken_rows"] if r["mistake"] == m]
-        out.append(f"<b>{esc(m)} defense.</b> {b['trips']} breakdowns in {G} games — {top_players(A, rs)} "
+        out.append(f"<b>{esc(m)} defense.</b> {b['trips']} breakdowns in {n_games(G)} — {top_players(A, rs)} "
                    f"account for the most. Every one has a clip time in the app.")
         costly_m, costly_b = max(big, key=lambda x: x[1]["ppp"] or 0)
         if costly_m != m:
@@ -520,18 +529,18 @@ def page_summary(A, total):
     body = f"""
     <header class="top">
       <div><h1>{TEAM} — Paint Touches &amp; PnR Defense</h1>
-        <div class="sub">{WORDS.get(G, G)}-game tracking report · {short_date(games[0]['date'])} – {short_date(games[-1]['date'])} {games[-1]['date'][:4]}</div></div>
-      <div><div class="big">{w} – {l_}</div><div class="bigsub">won – lost</div></div>
+        <div class="sub">{f"Game report · vs {esc(games[0]['label'])} · {short_date(games[0]['date'])} {games[0]['date'][:4]}" if G == 1 else f"{WORDS.get(G, G)}-game tracking report · {short_date(games[0]['date'])} – {short_date(games[-1]['date'])} {games[-1]['date'][:4]}"}</div></div>
+      {f'<div><div class="big">{games[0]["us"]}–{games[0]["them"]}</div><div class="bigsub">{ {"W": "won", "L": "lost", "T": "tied"}.get(games[0]["result"], "")}</div></div>' if G == 1 and games[0]["us"] is not None and games[0]["them"] is not None else f'<div><div class="big">{w} – {l_}</div><div class="bigsub">won – lost</div></div>'}
     </header>
     <div class="tiles">
       {tile(f2(o['ppp']), "Offense PPP", f"{o['poss']} possessions")}
       {tile(f"{f2(t['ppp'])} <small>/ {f2(n['ppp'])}</small>", "PPP with / without paint touch", f"{t['poss']} and {n['poss']} poss")}
       {tile(pc(t['poss'], o['poss']), "Possessions reaching the paint", f"{t['poss']} of {o['poss']}")}
       {tile(f2(d['ppp']), "PnR PPP allowed", f"{d['poss']} pick-and-roll poss")}
-      {tile(f"≈{cost:.0f}", "Points a game lost to PnR breakdowns", f"{d['broken']} breakdowns in {G} games")}
+      {tile(f"≈{cost:.0f}", "Points lost to PnR breakdowns" if G == 1 else "Points a game lost to PnR breakdowns", f"{d['broken']} breakdowns in {n_games(G)}")}
     </div>
     {section("Wins vs losses — what the tracking adds") + wl if wl else ""}
-    {section(f"What the {WORDS.get(G, G).lower()} games say")}
+    {section("What the game says" if G == 1 else f"What the {WORDS.get(G, G).lower()} games say")}
     <div class="cols2"><ul class="find">{"".join(f"<li>{x}</li>" for x in f[:half])}</ul>
       <ul class="find">{"".join(f"<li>{x}</li>" for x in f[half:])}</ul></div>
     {section("Priorities")}
@@ -559,7 +568,7 @@ def page_offense(A, total):
            pc(pg["o"]["to"], pg["o"]["poss"]),
            f'{pg["o"]["pts"]} of {pg["g"]["us"]}' if pg["g"]["us"] is not None else pg["o"]["pts"]], "")
          for pg in A["per_game"]]
-        + [([f"<b>{A['G']} games</b>", "", f"<b>{o['poss']}</b>", f"<b>{f2(o['ppp'])}</b>",
+        + [([f"<b>{n_games(A['G'])}</b>", "", f"<b>{o['poss']}</b>", f"<b>{f2(o['ppp'])}</b>",
              f"<b>{pc(t['poss'], o['poss'])}</b>", f"<b>{f2(t['ppp'])}</b>", f"<b>{f2(n['ppp'])}</b>",
              f"<b>{pc(o['to'], o['poss'])}</b>", ""], "total")],
     )
@@ -652,7 +661,7 @@ def page_defense(A, total):
            pc(pg["d"]["clean"], pg["d"]["trips"]), f2(pg["dc"]["ppp"]), f2(pg["db"]["ppp"]),
            pc(pg["d"]["to"], pg["d"]["poss"]), pg["d"]["ft"]], "")
          for pg in A["per_game"]]
-        + [([f"<b>{G} games</b>", "", f"<b>{d['trips']}</b>", f"<b>{f2(d['ppp'])}</b>",
+        + [([f"<b>{n_games(G)}</b>", "", f"<b>{d['trips']}</b>", f"<b>{f2(d['ppp'])}</b>",
              f"<b>{pc(d['clean'], d['trips'])}</b>", f"<b>{f2(dc['ppp'])}</b>", f"<b>{f2(db['ppp'])}</b>",
              f"<b>{pc(d['to'], d['poss'])}</b>", f"<b>{d['ft']}</b>"], "total")],
     )
@@ -785,7 +794,7 @@ def page_last_game(A, total):
     <header class="top slim"><div><h1>Last game — {esc(last['label'])}</h1>
       <div class="sub">{short_date(last['date'])} · {result_cell(last)} · {lb['poss']} offensive possessions · {len(ld)} pick-and-roll trips</div></div></header>
     {section("Against the season so far")}
-    {cmp_t}
+    {cmp_t if prev_keys else '<div class="note">Nothing to compare it with yet — this is the only game in the export.</div>'}
     <div class="note">One game is a small sample — about {lb['poss']} possessions on offense and {len(ld)} pick-and-roll trips. Coloured changes are at least 0.10 PPP or 5 percentage points; read them as “worth a look,” not as a trend.</div>
     <div class="cols2">
       <div>{section(f"Breakdowns to find on video ({len(br)})")}{br_t}</div>
