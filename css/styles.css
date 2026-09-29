@@ -1159,3 +1159,14 @@ select {
   user-select: text;
   -webkit-user-select: text;
 }
+
+/* Season screen: the three-way preseason switch fills the card, so no label
+   is squeezed into wrapping on a narrow screen. */
+.season-scope {
+  display: flex;
+  margin: 10px 0 6px;
+}
+
+.season-scope .segmented__btn {
+  flex: 1;
+}

@@ -107,13 +107,33 @@ the middle of it.
 
 **Sorting defaults, and why they differ.** The roster reads by jersey number, like a scorebook. Everything else keeps the order it was typed in, because those lists are short, hand-ordered by the coach, and their button positions are already muscle memory — alphabetising them by default would silently rearrange a sideline the coach had already learned. Sorting by *activity* (most-touched player floats to the top) was considered and rejected for the same reason. The stats tables read the rendered cell text rather than the raw stats, which is what lets every table be sortable without each caller describing its own columns; it holds only because those cells are plain text.
 
+**Preseason vs season is one date, not a label.** `js/phase.js`. The coach
+enters the day the season started on the Season screen; every game dated
+before it is preseason. Chosen by Dusan (Sep 2026) over a Preseason/Season
+switch on each game, knowing the costs: a friendly played mid-season counts
+as a season game, and the date lives in `localStorage` — per iPad, not in
+backups — like the sort settings. Nothing is written onto a game, so moving
+the date re-sorts every game with no migration, and with no date set the app
+behaves exactly as before. The first season game was vs Lokomotiv Kuban.
+
+One switch — Season only / Season + preseason / Season vs preseason — drives
+both the Season screen and the coach report, so their numbers can't quietly
+disagree. "Season vs preseason" adds a side-by-side section to the report
+(`phaseComparison()` in `report.js`): key numbers, by play, by coverage, each
+change coloured and put into words only once *both* sides have MIN_SAMPLE
+possessions. What a game is measured against is `comparisonPool()`: a season
+game against earlier season games, the first season game against the
+preseason (and the heading says so), a preseason game against earlier
+preseason only; "Season + preseason" uses every earlier game.
+`tools/coach_report.py` does not know about preseason yet.
+
 **"No mistake" has two stored shapes.** A defensive trip closed without tapping a breakdown means the coverage was run right. From 13 Aug to 21 Sep 2026 the game screen saved it as the `NO_MISTAKE` constant itself — `{ id, name }` — where every reader expects `{ mistakeId, mistakeName }`, so it was read as a breakdown with no name: 8 of the first 348 trips counted against the defense (139 breakdowns instead of 131), and the nameless one stopped the coach report from opening at all once a game with one became "the last game". Fixed going forward, and old records are *read* correctly through `isNoMistake()` / `mistakeNameOf()` in `possession.js` rather than rewritten — no migration, nothing stored is touched. Anything asking "was this trip clean?" goes through `isNoMistake()`. The report screen also no longer lets one blank cell take the whole page down, and a report that fails says so on screen with the error, because the button doesn't wait for it and a failure used to vanish silently.
 
 **Data model.** The unit is a *possession*: tap every player who touches the ball in the paint (repeat taps allowed, zero touches is valid and must count), then one outcome to close it — 2PM, 2PA, 3PM, 3PA, FT, TO. Made shots can attach an and-1 free throw to the same possession. PPP is the headline stat.
 
 ## Verifying changes
 
-**Run `python3 tests/run_all.py` before shipping anything** — seventeen suites, about two and a half minutes. See `tests/README.md` for what each covers and how to add more.
+**Run `python3 tests/run_all.py` before shipping anything** — eighteen suites, about two and a half minutes. See `tests/README.md` for what each covers and how to add more.
 
 There is no test framework and no Node here, so these drive a real browser (Playwright via `pip3`, not Homebrew) against a real local server. They cover the things unit tests would miss: database upgrades that must not eat existing games, stats that must not blend both teams' points, and offline behaviour tested by actually severing the network. Re-verify against the live URL after deploying.
 

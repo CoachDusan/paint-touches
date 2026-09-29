@@ -16,13 +16,14 @@ import { renderExportActions } from "./export-actions.js";
 import { renderBackupCard } from "./backup-card.js";
 import * as report from "./report.js";
 import { buildSeasonSummaryText, buildCSV } from "../export.js";
+import { SCOPES, getSeasonStart, setSeasonStart, getScope, setScope, splitByPhase, isPreseason } from "../phase.js";
 
 // Games still in progress are left out: a half-tracked game would drag the
 // season numbers around and then change again when it finishes.
 export async function render(root) {
-  const games = await Games.listCompleted();
+  const everyGame = await Games.listCompleted();
 
-  if (games.length === 0) {
+  if (everyGame.length === 0) {
     root.replaceChildren(
       el("div", { class: "screen" }, [
         el("h1", { class: "screen-title" }, "Season"),
@@ -33,8 +34,8 @@ export async function render(root) {
     return;
   }
 
-  const perGame = await Promise.all(
-    games.map(async (game) => {
+  const everyEntry = await Promise.all(
+    everyGame.map(async (game) => {
       const [possessions, tagEvents] = await Promise.all([
         Possessions.listByGame(game.id),
         TagEvents.listByGame(game.id),
@@ -42,6 +43,14 @@ export async function render(root) {
       return { game, possessions, tagEvents };
     })
   );
+
+  // Which games this screen is about, from the switch at the top. "Season vs
+  // preseason" shows every game, with the two kept apart wherever they meet.
+  const start = getSeasonStart();
+  const scope = getScope();
+  const phases = splitByPhase(everyEntry, start);
+  const perGame = scope === "season" ? phases.season : everyEntry;
+  const games = perGame.map((e) => e.game);
 
   // Oldest first, so a trend reads left-to-right the way a season does.
   const chronological = [...perGame].sort((a, b) => (a.game.date || "").localeCompare(b.game.date || ""));
@@ -53,7 +62,7 @@ export async function render(root) {
 
   const state = { kind: "plays", id: null };
 
-  function buildRecord() {
+  function buildRecord(games, title = "Record") {
     const withResult = games.filter((g) => gameResult(g));
     const tally = (list) => ({
       w: list.filter((g) => gameResult(g) === "W").length,
@@ -69,7 +78,7 @@ export async function render(root) {
     }).filter(Boolean);
 
     return el("div", { class: "card" }, [
-      el("div", { class: "section-label" }, "Record"),
+      el("div", { class: "section-label" }, title),
       el("div", { class: "stat-strip" }, [
         statTile("Games", games.length),
         withResult.length ? statTile("Record", fmt(overall)) : null,
@@ -170,7 +179,8 @@ export async function render(root) {
         ["Game", "Poss", "PPP", ""],
         rows.map(({ game, row }) =>
           el("tr", {}, [
-            el("td", {}, `${formatDate(game.date)}${game.opponent ? " · " + game.opponent : ""}`),
+            el("td", {}, `${scope !== "season" && isPreseason(game, start) ? "Pre · " : ""}` +
+              `${formatDate(game.date)}${game.opponent ? " · " + game.opponent : ""}`),
             el("td", {}, row ? String(row.possessions) : "—"),
             el("td", {}, row ? formatPPP(row.points, row.possessions) : "—"),
             // A bar beats a column of numbers for spotting a slope, and it
@@ -191,14 +201,75 @@ export async function render(root) {
     ]);
   }
 
+  // The season start date and the switch. The date is the whole of how the
+  // app tells preseason from season: every game before it is preseason.
+  function buildPhaseCard() {
+    const input = el("input", { type: "date", name: "season-start", value: start || "" });
+    input.addEventListener("change", () => {
+      setSeasonStart(input.value || null);
+      render(root);
+    });
+
+    const n = (x) => `${x} game${x === 1 ? "" : "s"}`;
+    return el("div", { class: "card" }, [
+      el("div", { class: "section-label" }, "Preseason and season"),
+      el("div", { class: "field" }, [el("label", {}, "The season started on"), input]),
+      start
+        ? el("div", { class: "segmented season-scope" },
+            SCOPES.map((opt) =>
+              el("button", {
+                class: "segmented__btn" + (scope === opt.key ? " is-active" : ""),
+                "data-scope": opt.key,
+                onclick: () => {
+                  if (scope === opt.key) return;
+                  setScope(opt.key);
+                  render(root);
+                },
+              }, opt.label)
+            ))
+        : null,
+      el("div", { class: "stat-note" }, start
+        ? `${n(phases.preseason.length)} of preseason, ${n(phases.season.length)} of the season. ` +
+          "The switch decides what the totals below and the coach report include. " +
+          "The date is kept on this iPad only, not in backups."
+        : "Set the day of the first season game, and every game before it counts as preseason. " +
+          "Until then, every game counts together."),
+    ]);
+  }
+
+  // Totals for a list of entries, under their own label. Twice over in
+  // "Season vs preseason", once otherwise.
+  function totalsBlock(label, entries) {
+    return [
+      el("div", { class: "card" }, [
+        el("div", { class: "section-label" }, label),
+        el("div", { class: "stat-note" },
+          "Total points divided by total possessions, not the average of each game's PPP — otherwise a short game would count as much as a full one."),
+      ]),
+      entries.length
+        ? renderGameStats(entries.flatMap((e) => e.possessions), entries.flatMap((e) => e.tagEvents))
+        : el("div", { class: "empty-state" }, "No games here yet."),
+    ];
+  }
+
   function paint() {
     document.getElementById("app-bar-context").textContent =
       `${games.length} game${games.length === 1 ? "" : "s"}`;
 
+    const noSeasonYet = scope === "season" && games.length === 0;
+
     root.replaceChildren(
       el("div", { class: "screen" }, [
         el("h1", { class: "screen-title" }, "Season"),
-        buildRecord(),
+        buildPhaseCard(),
+        noSeasonYet
+          ? el("div", { class: "empty-state" },
+              "No season games finished yet. Switch to “Season + preseason” to see the preseason.")
+          : null,
+        ...(noSeasonYet ? [] : scope === "compare"
+          ? [buildRecord(phases.season.map((e) => e.game), "Record — season"),
+             buildRecord(phases.preseason.map((e) => e.game), "Record — preseason")]
+          : [buildRecord(games)]),
         // The report lives behind Season rather than in the tab bar: it is
         // made between games, never reached for on the bench.
         el("div", { class: "card" }, [
@@ -210,15 +281,13 @@ export async function render(root) {
             onclick: () => report.render(root, { onBack: () => render(root) }),
           }, "Open the coach report"),
         ]),
-        buildTrend(),
-        el("div", { class: "card" }, [
-          el("div", { class: "section-label" }, "Season totals — every completed game"),
-          el("div", { class: "stat-note" },
-            "Total points divided by total possessions, not the average of each game's PPP — otherwise a short game would count as much as a full one."),
-        ]),
-        renderGameStats(allPossessions, allTagEvents),
+        noSeasonYet ? null : buildTrend(),
+        ...(noSeasonYet ? []
+          : scope === "compare"
+            ? [...totalsBlock("Season totals", phases.season), ...totalsBlock("Preseason totals", phases.preseason)]
+            : totalsBlock(scope === "season" ? "Season totals — season games only" : "Totals — every completed game", perGame)),
         renderExportActions({
-          title: `Season — ${games.length} games`,
+          title: `${scope === "season" ? "Season" : "Season + preseason"} — ${games.length} games`,
           buildSummary: () => buildSeasonSummaryText(games, allPossessions, allTagEvents),
           buildCsv: () => buildCSV(chronological),
           filenameBase: "paint-touches-season",

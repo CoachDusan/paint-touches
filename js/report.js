@@ -44,11 +44,14 @@ export function gameOrder(a, b) {
     (a.completedAt || a.createdAt || 0) - (b.completedAt || b.createdAt || 0);
 }
 
-// `before` turns this into a one-game report: `unordered` is that game alone,
-// and `before` is every game that came earlier — what it is measured against.
+// `before` is what the last game is measured against — for a one-game report,
+// `unordered` is that game alone and `before` the games that came earlier.
 // Only earlier ones: set against the season as it stood that day, a game's
-// report reads the same in March as it did the morning after.
-export function buildReport(unordered, { before = null } = {}) {
+// report reads the same in March as it did the morning after. `beforeLabel`
+// names that pool ("Preseason, 8 games") when it isn't simply every game
+// before. `against` — { label, entries } — adds the side-by-side of this
+// selection against another one: the season against its preseason.
+export function buildReport(unordered, { before = null, beforeLabel = null, against = null } = {}) {
   const entries = [...unordered].sort((a, b) => gameOrder(a.game, b.game));
   const games = entries.map((e) => e.game);
   const G = games.length;
@@ -69,7 +72,7 @@ export function buildReport(unordered, { before = null } = {}) {
       ? ((broken.ppp - clean.ppp) * broken.possessions) / G
       : null;
 
-  const ctx = { entries, games, G, off, def, perGame, t, n, clean, broken, costPerGame, before };
+  const ctx = { entries, games, G, off, def, perGame, t, n, clean, broken, costPerGame, before, beforeLabel };
 
   return {
     games, G, off, def, perGame, costPerGame,
@@ -82,6 +85,7 @@ export function buildReport(unordered, { before = null } = {}) {
     offense: offenseDetail(ctx),
     defense: defenseDetail(ctx),
     lastGame: lastGameDetail(ctx),
+    phases: against ? phaseComparison({ off, def, G }, against) : null,
   };
 }
 
@@ -638,6 +642,36 @@ const RATE_MOVE = 0.05;
 
 const isClean = (p) => isNoMistake(p.mistake);
 
+// The headline numbers any two selections are compared on. The last element
+// is the sample a number rests on — possessions for a PPP, the trips a rate is
+// taken over — so a comparison can refuse to colour what it can't support.
+const METRICS = [
+  ["Offense PPP", (s) => s.off.overall.ppp, "ppp", 1, (s) => s.off.overall.possessions],
+  ["Possessions reaching the paint",
+    (s) => rate(s.off.touchSplit.withTouches.possessions, s.off.overall.possessions), "rate", 1,
+    (s) => s.off.overall.possessions],
+  ["PPP with a paint touch", (s) => s.off.touchSplit.withTouches.ppp, "ppp", 1,
+    (s) => s.off.touchSplit.withTouches.possessions],
+  ["PPP without", (s) => s.off.touchSplit.noTouches.ppp, "ppp", 1, (s) => s.off.touchSplit.noTouches.possessions],
+  ["Turnover rate", (s) => s.off.overall.toRate, "rate", -1, (s) => s.off.overall.possessions],
+  ["PnR PPP allowed", (s) => s.def.overall.ppp, "ppp", -1, (s) => s.def.overall.possessions],
+  ["PnR trips run clean", (s) => s.def.overall.cleanRate, "rate", 1, (s) => s.def.overall.trips],
+  ["PPP allowed on a breakdown", (s) => s.def.executionSplit.broken.ppp, "ppp", -1,
+    (s) => s.def.executionSplit.broken.possessions],
+];
+
+// "+0.12" or "+4 pts", green or red once the move clears the noise line and
+// `enough` says both sides have the sample to carry it.
+function changeCell(was, is, kind, better, enough) {
+  if (was === null || was === undefined || is === null || is === undefined) return "—";
+  const diff = is - was;
+  const shown = kind === "ppp"
+    ? `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}`
+    : `${diff >= 0 ? "+" : ""}${Math.round(diff * 100)} pts`;
+  const moved = Math.abs(diff) >= (kind === "ppp" ? PPP_MOVE : RATE_MOVE);
+  return moved && enough ? cell(shown, diff * better > 0 ? "good" : "bad") : shown;
+}
+
 const quarterName = (q) => (q === "OT" ? "OT" : `Q${q}`);
 
 // Two clocks, because neither is enough alone: the wall clock matches a phone
@@ -648,46 +682,25 @@ const tappedCells = (p, game) => [
   formatElapsed(p.startedAt, game.createdAt) || "—",
 ];
 
-function lastGameDetail({ entries, perGame, G, before: earlier }) {
+function lastGameDetail({ entries, perGame, G, before: earlier, beforeLabel }) {
   if (G === 0) return null;
 
   const { game, possessions } = entries[entries.length - 1];
   const now = perGame[perGame.length - 1];
   const before = earlier || entries.slice(0, -1);
 
-  const metrics = [
-    ["Offense PPP", (s) => s.off.overall.ppp, "ppp", 1],
-    ["Possessions reaching the paint",
-      (s) => rate(s.off.touchSplit.withTouches.possessions, s.off.overall.possessions), "rate", 1],
-    ["PPP with a paint touch", (s) => s.off.touchSplit.withTouches.ppp, "ppp", 1],
-    ["PPP without", (s) => s.off.touchSplit.noTouches.ppp, "ppp", 1],
-    ["Turnover rate", (s) => s.off.overall.toRate, "rate", -1],
-    ["PnR PPP allowed", (s) => s.def.overall.ppp, "ppp", -1],
-    ["PnR trips run clean", (s) => s.def.overall.cleanRate, "rate", 1],
-    ["PPP allowed on a breakdown", (s) => s.def.executionSplit.broken.ppp, "ppp", -1],
-  ];
-
   let comparison = null;
   if (before.length) {
     const prev = totals(before);
     comparison = {
-      headers: ["", `Previous ${before.length} game${before.length === 1 ? "" : "s"}`,
+      headers: ["", beforeLabel || `Previous ${before.length} game${before.length === 1 ? "" : "s"}`,
                 game.opponent || "Last game", "Change"],
       numeric: [1, 2, 3],
-      rows: metrics.map(([label, read, kind, better]) => {
+      rows: METRICS.map(([label, read, kind, better]) => {
         const was = read(prev);
         const is = read(now);
         const fmt = kind === "ppp" ? f2 : pc;
-        let change = "—";
-        if (was !== null && was !== undefined && is !== null && is !== undefined) {
-          const diff = is - was;
-          const shown = kind === "ppp"
-            ? `${diff >= 0 ? "+" : ""}${diff.toFixed(2)}`
-            : `${diff >= 0 ? "+" : ""}${Math.round(diff * 100)} pts`;
-          const moved = Math.abs(diff) >= (kind === "ppp" ? PPP_MOVE : RATE_MOVE);
-          change = moved ? cell(shown, diff * better > 0 ? "good" : "bad") : shown;
-        }
-        return { cells: [label, fmt(was), cell(fmt(is), null), change] };
+        return { cells: [label, fmt(was), cell(fmt(is), null), changeCell(was, is, kind, better, true)] };
       }),
       note: `One game is a small sample — ${now.off.overall.possessions} possessions on offense and ` +
             `${now.def.overall.trips} pick-and-roll trips. A change is only coloured once it clears ` +
@@ -737,4 +750,96 @@ function lastGameDetail({ entries, perGame, G, before: earlier }) {
     note: "“Tapped” is the iPad clock when the possession was logged; “into game” counts from when the game " +
           "was started. A game logged afterwards from video has neither — go by quarter and order instead.",
   };
+}
+
+// ---------------------------------------------------------------------
+// This selection against another: the season against its preseason.
+//
+// Unlike the last game, both sides here can grow large enough to mean
+// something — but early in a season one side is a game or two, so a change is
+// only coloured, and only put into words, once both sides rest on MIN_SAMPLE
+// possessions. Until then the columns are there to read and the report says
+// plainly that it is too soon to call.
+// ---------------------------------------------------------------------
+
+function phaseComparison(now, { label, entries }) {
+  const was = { ...totals(entries), G: entries.length };
+  const n = (x) => `${x} game${x === 1 ? "" : "s"}`;
+
+  const key = {
+    headers: ["", `${label} · ${n(was.G)}`, `Season · ${n(now.G)}`, "Change"],
+    numeric: [1, 2, 3],
+    rows: METRICS.map(([name, read, kind, better, sample]) => {
+      const fmt = kind === "ppp" ? f2 : pc;
+      const enough = sample(was) >= MIN_SAMPLE && sample(now) >= MIN_SAMPLE;
+      return {
+        cells: [name, fmt(read(was)), cell(fmt(read(now)), null), changeCell(read(was), read(now), kind, better, enough)],
+        thin: !enough,
+      };
+    }),
+  };
+
+  // One row per play or coverage that appears on either side, keyed by id so
+  // a set renamed between preseason and season stays one row, wearing the
+  // season's name.
+  const byId = (thenRows, nowRows, lowerIsBetter) => {
+    const ids = [...new Set([...nowRows.map((r) => r.id), ...thenRows.map((r) => r.id)])];
+    const blank = { possessions: 0, ppp: null };
+    return ids.map((id) => {
+      const a = thenRows.find((r) => r.id === id) || blank;
+      const b = nowRows.find((r) => r.id === id) || blank;
+      const enough = a.possessions >= MIN_SAMPLE && b.possessions >= MIN_SAMPLE;
+      return {
+        cells: [(nowRows.find((r) => r.id === id) || thenRows.find((r) => r.id === id)).name,
+                String(a.possessions), f2(a.ppp), String(b.possessions), f2(b.ppp),
+                changeCell(a.ppp, b.ppp, "ppp", lowerIsBetter ? -1 : 1, enough)],
+        thin: !enough,
+        weight: b.possessions * 1000 + a.possessions,
+      };
+    }).sort((x, y) => y.weight - x.weight).map(({ cells, thin }) => ({ cells, thin }));
+  };
+
+  const plays = {
+    headers: ["Play", `${label} poss`, "PPP", "Season poss", "PPP", "Change"],
+    numeric: [1, 2, 3, 4, 5],
+    rows: byId(was.off.byPlay, now.off.byPlay, false),
+    note: `Coloured only when the play has ${MIN_SAMPLE}+ possessions on both sides and moved at least ` +
+          `${PPP_MOVE.toFixed(2)} PPP. Grey rows are too thin on one side to compare.`,
+  };
+  const coverages = {
+    headers: ["Coverage", `${label} poss`, "PPP allowed", "Season poss", "PPP allowed", "Change"],
+    numeric: [1, 2, 3, 4, 5],
+    rows: byId(was.def.byCoverage, now.def.byCoverage, true),
+    note: "Points allowed, so a fall is the good direction. Same rule as the plays: " +
+          `${MIN_SAMPLE}+ possessions on both sides before anything is coloured.`,
+  };
+
+  // The read: only what both sides can carry.
+  const read = [];
+  const say = (what, a, b, sampleA, sampleB, lowerIsBetter) => {
+    if (a === null || b === null || sampleA < MIN_SAMPLE || sampleB < MIN_SAMPLE) return false;
+    const diff = b - a;
+    if (Math.abs(diff) < PPP_MOVE) {
+      read.push(`${what} is about where it was in the ${label.toLowerCase()} (${f2(b)} against ${f2(a)}).`);
+    } else {
+      const better = lowerIsBetter ? diff < 0 : diff > 0;
+      read.push(`${what} is ${better ? "better" : "worse"} than in the ${label.toLowerCase()}: ${f2(b)} against ${f2(a)}.`);
+    }
+    return true;
+  };
+  const offSaid = say("The offense", was.off.overall.ppp, now.off.overall.ppp,
+                      was.off.overall.possessions, now.off.overall.possessions, false);
+  const defSaid = say("Pick-and-roll defense", was.def.overall.ppp, now.def.overall.ppp,
+                      was.def.overall.possessions, now.def.overall.possessions, true);
+  if (!offSaid || !defSaid) {
+    read.push(`${offSaid || defSaid ? "The rest is" : "It is"} too soon to call: ` +
+              `${now.off.overall.possessions} offensive possessions and ${now.def.overall.possessions} ` +
+              `pick-and-roll possessions so far this season, against ${was.off.overall.possessions} and ` +
+              `${was.def.overall.possessions} in the ${label.toLowerCase()}. Nothing is claimed on fewer than ` +
+              `${MIN_SAMPLE} a side.`);
+  }
+  read.push("A preseason is often played against different opponents and with rotations still being tried, " +
+            "so a change can be the schedule as much as the team.");
+
+  return { label, key, plays, coverages, read: read.join(" ") };
 }

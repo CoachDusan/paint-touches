@@ -29,6 +29,7 @@ ORDER = [
     "test_cleanup.py",
     "test_season.py",
     "test_report.py",
+    "test_preseason.py",
     "test_export.py",
     "test_offline.py",
     "test_cache_neighbours.py",

@@ -9,6 +9,7 @@ import { computeStats } from "../stats.js";
 import { renderGameStats } from "./game-stats.js";
 import { renderExportActions } from "./export-actions.js";
 import { buildGameSummaryText, buildCSV } from "../export.js";
+import { isPreseason } from "../phase.js";
 import * as report from "./report.js";
 
 export async function render(root) {
@@ -282,6 +283,7 @@ export async function render(root) {
                   resultBadge(game),
                   el("strong", {}, game.opponent ? `vs ${game.opponent}` : "Game"),
                   el("span", { class: "pill" }, formatDate(game.date)),
+                  isPreseason(game) ? el("span", { class: "pill" }, "Preseason") : null,
                   game.venue ? el("span", { class: "pill" }, venueLabel(game.venue)) : null,
                   scoreLine(game) ? el("span", { class: "pill" }, scoreLine(game)) : null,
                 ]),
@@ -309,6 +311,7 @@ export async function render(root) {
             : el("span", { class: "score-line__score score-line__score--empty" }, "No score recorded"),
           resultBadge(game),
           game.venue ? el("span", { class: "pill" }, venueLabel(game.venue)) : null,
+          isPreseason(game) ? el("span", { class: "pill" }, "Preseason") : null,
         ]),
         el("button", {
           class: "btn btn-sm",
@@ -332,7 +335,7 @@ export async function render(root) {
         el("div", { class: "card" }, [
           el("div", { class: "section-label" }, "Game report"),
           el("div", { class: "stat-note" },
-            "The coach report for this game alone, set against the games finished before it. Print it or save it as a PDF."),
+            "The coach report for this game alone, set against the games of the same kind finished before it — the first game of the season against the preseason. Print it or save it as a PDF."),
           el("button", {
             class: "btn btn-primary btn-block",
             onclick: () => report.render(root, {

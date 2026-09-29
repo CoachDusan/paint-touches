@@ -10,6 +10,7 @@ import { el, formatDate } from "../utils.js";
 import { Games, Possessions } from "../models.js";
 import { buildReport, gameOrder } from "../report.js";
 import { printCurrentView } from "../share.js";
+import { getSeasonStart, getScope, splitByPhase, comparisonPool, isPreseason, SCOPES } from "../phase.js";
 
 function tile(t) {
   return el("div", { class: "stat-tile" }, [
@@ -96,7 +97,7 @@ function bullets(items, tag) {
 
 // The most recent game, set against everything before it — the part that gets
 // used on Monday, with enough on every row to find the moment on video.
-function lastGameSection(r, single) {
+function lastGameSection(r, single, poolTitle) {
   const last = r.lastGame;
   if (!last) return [];
 
@@ -111,9 +112,9 @@ function lastGameSection(r, single) {
       `${plural(stats.off.overall.possessions, "offensive possession")} · ` +
       `${plural(stats.def.overall.trips, "pick-and-roll trip")}`),
     last.comparison
-      ? tableCard("Against the season so far", last.comparison)
+      ? tableCard(poolTitle, last.comparison)
       : el("div", { class: "card" }, [
-          el("div", { class: "section-label" }, "Against the season so far"),
+          el("div", { class: "section-label" }, poolTitle),
           el("div", { class: "stat-note" }, single
             ? "Nothing to compare it with — no game was finished before this one."
             : "Nothing to compare it with yet — this is the only game."),
@@ -123,6 +124,24 @@ function lastGameSection(r, single) {
     listCard(`Turnovers (${last.turnovers.rows.length})`, last.turnovers,
       "No turnovers logged in this game."),
     el("div", { class: "card" }, [el("div", { class: "stat-note" }, last.note)]),
+  ];
+}
+
+// Season against preseason, side by side. Only there when the switch on the
+// Season screen asks for it.
+function phaseSection(r) {
+  const p = r.phases;
+  if (!p) return [];
+  return [
+    heading("Season vs preseason",
+      "The season on the right, the preseason on the left. Grey rows rest on too few possessions on one side to compare."),
+    tableCard("Key numbers", p.key),
+    el("div", { class: "card" }, [
+      el("div", { class: "section-label" }, "The read"),
+      el("p", { class: "report-read" }, p.read),
+    ]),
+    listCard("By play", p.plays, "No offensive possessions logged on either side."),
+    listCard("By coverage", p.coverages, "No pick-and-roll possessions tracked on either side."),
   ];
 }
 
@@ -188,9 +207,49 @@ async function renderReport(root, { onBack, backLabel = "← Season", gameId = n
   const ordered = [...games].sort(gameOrder);
   const at = gameId ? ordered.findIndex((g) => g.id === gameId) : -1;
   const single = at >= 0;
-  const r = single
-    ? buildReport(await load([ordered[at]]), { before: await load(ordered.slice(0, at)) })
-    : buildReport(await load(ordered));
+  const start = getSeasonStart();
+  const scope = single ? null : getScope();
+  const { preseason, season } = splitByPhase(ordered, start, (g) => g);
+
+  // Which games the report is about. "Season + preseason" is everything; the
+  // other two are about the season, with the preseason only as the thing it
+  // is set against.
+  const subject = single ? [ordered[at]] : scope === "all" ? ordered : season;
+
+  if (subject.length === 0) {
+    root.replaceChildren(
+      el("div", { class: "screen" }, [
+        backBar(),
+        el("div", { class: "empty-state" },
+          `No season games finished yet — the season starts on ${formatDate(start)}. ` +
+          "To see the preseason, set the Season screen to “Season + preseason”."),
+      ])
+    );
+    return;
+  }
+
+  // What the last game is measured against. "Season + preseason" means every
+  // earlier game, as asked; otherwise a season game is set against earlier
+  // season games, and the first of the season against the preseason.
+  const lastGame = subject[subject.length - 1];
+  const earlier = ordered.slice(0, ordered.indexOf(lastGame));
+  const pool = scope === "all"
+    ? { entries: earlier, label: null }
+    : comparisonPool(lastGame, earlier, start, (g) => g);
+  const poolTitle = !start ? "Against the season so far"
+    : scope === "all" ? "Against every game before it"
+    : isPreseason(lastGame, start) ? "Against the preseason so far"
+    : pool.label.startsWith("Preseason") ? "Against the preseason — first game of the season"
+    : "Against the season so far";
+
+  const r = buildReport(await load(subject), {
+    before: await load(pool.entries),
+    beforeLabel: pool.label,
+    against: scope === "compare" ? { label: "Preseason", entries: await load(preseason) } : null,
+  });
+  const scopeLabel = single
+    ? (start ? (isPreseason(lastGame, start) ? "preseason" : "season") : "")
+    : start ? SCOPES.find((x) => x.key === scope).label : "";
   // From the report's own ordering: the database hands games back newest
   // first, which once printed the range as "Sep 20 – Aug 29".
   const first = r.games[0].date;
@@ -220,9 +279,9 @@ async function renderReport(root, { onBack, backLabel = "← Season", gameId = n
           el("div", { class: "report-title" }, single
             ? `${only.opponent ? "vs " + only.opponent : "Game"} · paint touches & pick-and-roll defense`
             : `${r.G} game${r.G === 1 ? "" : "s"} · paint touches & pick-and-roll defense`),
-          el("div", { class: "stat-note" }, first === last
+          el("div", { class: "stat-note" }, (first === last
             ? formatDate(first)
-            : `${formatDate(first)} – ${formatDate(last)}`),
+            : `${formatDate(first)} – ${formatDate(last)}`) + (scopeLabel ? ` · ${scopeLabel}` : "")),
         ]),
         el("div", { class: "report-record" }, [
           el("div", { class: "report-record__value" }, rec),
@@ -247,6 +306,8 @@ async function renderReport(root, { onBack, backLabel = "← Season", gameId = n
             ]),
           ])
         : null,
+
+      ...phaseSection(r),
 
       r.findings.length
         ? el("div", { class: "card" }, [
@@ -301,7 +362,7 @@ async function renderReport(root, { onBack, backLabel = "← Season", gameId = n
         "No breakdowns tagged to a player."),
       listCard("By quarter", r.defense.quarters, "No pick-and-roll possessions tracked."),
 
-      ...lastGameSection(r, single),
+      ...lastGameSection(r, single, poolTitle),
     ])
   );
 }
